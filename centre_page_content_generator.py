@@ -293,13 +293,22 @@ if st.session_state.df is not None:
                         st.error("Please enter Anthropic API key first")
                     else:
                         with st.spinner("Regenerating content..."):
-                            new_content = generate_property_description(
-                                property_data, 
-                                st.session_state.api_key
-                            )
-                            st.session_state.generated_content[idx] = new_content
-                            st.session_state.df.at[idx, 'Generated Content'] = new_content
-                            st.experimental_rerun()
+                            try:
+                                new_content = generate_property_description(
+                                    property_data, 
+                                    st.session_state.api_key
+                                )
+                                st.session_state.generated_content[idx] = new_content
+                                st.session_state.df.at[idx, 'Generated Content'] = new_content
+                                st.success("Content regenerated successfully!")
+                                # Force refresh the page content without using experimental_rerun
+                                st.markdown("Content updated! Displaying new version below:")
+                                if new_content is not None and isinstance(new_content, str):
+                                    cleaned_new_content = new_content.replace('\\n', '\n')
+                                    cleaned_new_content = cleaned_new_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
+                                    st.markdown(cleaned_new_content)
+                            except Exception as e:
+                                st.error(f"Error regenerating content: {str(e)}")
                 
                 # Use cleaned content for editing
                 if content is not None and isinstance(content, str):
@@ -320,13 +329,21 @@ if st.session_state.df is not None:
                         st.error("Please enter Anthropic API key first")
                     else:
                         with st.spinner("Generating content..."):
-                            content = generate_property_description(
-                                property_data, 
-                                st.session_state.api_key
-                            )
-                            st.session_state.generated_content[idx] = content
-                            st.session_state.df.at[idx, 'Generated Content'] = content
-                            st.experimental_rerun()
+                            try:
+                                content = generate_property_description(
+                                    property_data, 
+                                    st.session_state.api_key
+                                )
+                                st.session_state.generated_content[idx] = content
+                                st.session_state.df.at[idx, 'Generated Content'] = content
+                                st.success("Content generated successfully!")
+                                # Display the newly generated content
+                                if content is not None and isinstance(content, str):
+                                    cleaned_content = content.replace('\\n', '\n')
+                                    cleaned_content = cleaned_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
+                                    st.markdown(cleaned_content)
+                            except Exception as e:
+                                st.error(f"Error generating content: {str(e)}")
 else:
     st.info("Please upload a CSV or Excel file containing property data.")
     
