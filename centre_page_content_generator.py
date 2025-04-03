@@ -299,165 +299,7 @@ with st.sidebar:
             with col1:
                 st.text(term)
             with col2:
-                if st.button("Check for Excluded Terms in All Content"):
-            found_terms = {}
-            for idx, row in st.session_state.df.iterrows():
-                content = row.get('Generated Content', '')
-                if content and isinstance(content, str):
-                    property_name = row.get('Property Name', f'Property #{idx}')
-                    found_in_this_property = []
-                    
-                    for term in st.session_state.excluded_terms:
-                        if term.lower() in content.lower():
-                            found_in_this_property.append(term)
-                    
-                    if found_in_this_property:
-                        found_terms[property_name] = found_in_this_property
-            
-            if found_terms:
-                st.error("Found excluded terms in content:")
-                for property_name, terms in found_terms.items():
-                    st.markdown(f"**{property_name}**: {', '.join(terms)}")
-                add_debug(f"Found excluded terms in {len(found_terms)} properties")
-            else:
-                st.success("No excluded terms found in content!")
-                add_debug("No excluded terms found in content")
-    
-    # Batch settings
-    st.subheader("Batch Processing Settings")
-    
-    batch_size = st.slider("Batch Size", min_value=1, max_value=20, value=st.session_state.batch_size, 
-                          help="Number of properties to process at once")
-    
-    delay = st.slider("Delay Between API Calls (seconds)", min_value=0, max_value=10, value=st.session_state.api_delay, 
-                     help="Add delay between API calls to avoid rate limits")
-    
-    # Save settings to session state
-    if st.button("Save Batch Settings"):
-        st.session_state.batch_size = batch_size
-        st.session_state.api_delay = delay
-        st.success("Batch settings saved!")
-        add_debug(f"Batch settings updated: size={batch_size}, delay={delay}s")
-    
-    # Export/Import excluded terms
-    st.subheader("Export/Import Settings")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Export Excluded Terms"):
-            excluded_terms_data = "\n".join(st.session_state.excluded_terms)
-            st.download_button(
-                label="Download Excluded Terms",
-                data=excluded_terms_data,
-                file_name="excluded_terms.txt",
-                mime="text/plain"
-            )
-    
-    with col2:
-        terms_file = st.file_uploader("Import Excluded Terms", type=['txt'], key="terms_upload")
-        if terms_file is not None:
-            try:
-                content = terms_file.getvalue().decode("utf-8").strip()
-                terms = [line.strip() for line in content.split("\n") if line.strip()]
-                
-                new_terms = [term for term in terms if term not in st.session_state.excluded_terms]
-                if new_terms:
-                    st.session_state.excluded_terms.extend(new_terms)
-                    st.success(f"Added {len(new_terms)} new terms from file")
-                    add_debug(f"Imported {len(new_terms)} excluded terms from file")
-                else:
-                    st.info("No new terms found in file")
-            except Exception as e:
-                st.error(f"Error importing terms: {str(e)}")
-
-# Debug information (expandable section)
-with st.expander("Debug Information"):
-    st.subheader("Debug Log")
-    for log in st.session_state.debug_info:
-        st.text(log)
-    
-    if st.button("Clear Debug Log"):
-        st.session_state.debug_info = []
-        st.experimental_rerun()
-    
-    # Display raw API response if available
-    if st.session_state.api_response:
-        st.subheader("Last API Response")
-        st.json(st.session_state.api_response)
-    
-    st.subheader("Session State")
-    # Show non-sensitive session state info
-    safe_state = {
-        "selected_property": st.session_state.selected_property,
-        "is_generating": st.session_state.is_generating,
-        "progress": st.session_state.progress,
-        "has_api_key": bool(st.session_state.api_key),
-        "selected_model": st.session_state.selected_model,
-        "excluded_terms_count": len(st.session_state.excluded_terms),
-        "example_copies_count": len(st.session_state.example_copies),
-        "content_count": len(st.session_state.generated_content),
-        "has_dataframe": st.session_state.df is not None,
-        "batch_size": st.session_state.batch_size,
-        "api_delay": st.session_state.api_delay
-    }
-    
-    if st.session_state.df is not None:
-        safe_state["dataframe_shape"] = st.session_state.df.shape
-        safe_state["dataframe_columns"] = list(st.session_state.df.columns)
-    
-    st.json(safe_state)
-
-# Help information
-with st.expander("Help & Usage Guide"):
-    st.markdown("""
-    ## Centre Page Content Generator - Usage Guide
-    
-    This application generates professional descriptions for office space properties using AI.
-    
-    ### Main Features
-    
-    1. **Property Data Management**
-       - Upload property data in CSV or Excel format
-       - Each property should include name, location, amenities, etc.
-    
-    2. **Content Customization**
-       - **Excluded Terms**: Add specific terms you want to avoid in the content
-       - **Example Copies**: Upload good examples to guide the AI's style and tone
-       - **Model Selection**: Choose between different Claude models based on quality/speed needs
-    
-    3. **Content Generation**
-       - Generate descriptions for all properties at once
-       - Regenerate individual descriptions as needed
-       - Edit generated content directly in the application
-    
-    4. **Export**
-       - Download all property descriptions as CSV or Excel
-       - Export your excluded terms list for future use
-    
-    ### Using Excluded Terms
-    
-    The "Terms to Avoid" feature helps maintain brand consistency and avoid specific language:
-    - Add terms or phrases you don't want to appear in the generated content
-    - The AI will actively avoid these terms during content creation
-    - Use the content analysis tool to check if any excluded terms appear in the output
-    
-    ### Using Example Copies
-    
-    The example copies feature helps the AI match your preferred style:
-    - Upload or paste examples of well-written property descriptions
-    - The AI will emulate the tone, structure, and style of these examples
-    - More examples = better understanding of your preferred style
-    
-    ### Advanced Settings
-    
-    - **Batch Processing**: Control how many properties are processed at once
-    - **API Delays**: Add time between API calls to avoid rate limits
-    - **Content Analysis**: Check if generated content contains excluded terms
-    """)
-
-# Footer
-st.markdown("---")
-st.caption("Centre Page Content Generator | Developed by MediaVision & Metis")button("🗑️", key=f"del_term_{i}"):
+                if st.button("🗑️", key=f"del_term_{i}"):
                     st.session_state.excluded_terms.pop(i)
                     add_debug(f"Removed excluded term: '{term}'")
                     st.experimental_rerun()
@@ -786,4 +628,162 @@ with st.expander("Advanced Content Settings"):
     
     # Analyze content for excluded terms
     if st.session_state.df is not None and 'Generated Content' in st.session_state.df.columns:
-        if st.
+        if st.button("Check for Excluded Terms in All Content"):
+            found_terms = {}
+            for idx, row in st.session_state.df.iterrows():
+                content = row.get('Generated Content', '')
+                if content and isinstance(content, str):
+                    property_name = row.get('Property Name', f'Property #{idx}')
+                    found_in_this_property = []
+                    
+                    for term in st.session_state.excluded_terms:
+                        if term.lower() in content.lower():
+                            found_in_this_property.append(term)
+                    
+                    if found_in_this_property:
+                        found_terms[property_name] = found_in_this_property
+            
+            if found_terms:
+                st.error("Found excluded terms in content:")
+                for property_name, terms in found_terms.items():
+                    st.markdown(f"**{property_name}**: {', '.join(terms)}")
+                add_debug(f"Found excluded terms in {len(found_terms)} properties")
+            else:
+                st.success("No excluded terms found in content!")
+                add_debug("No excluded terms found in content")
+    
+    # Batch settings
+    st.subheader("Batch Processing Settings")
+    
+    batch_size = st.slider("Batch Size", min_value=1, max_value=20, value=st.session_state.batch_size, 
+                          help="Number of properties to process at once")
+    
+    delay = st.slider("Delay Between API Calls (seconds)", min_value=0, max_value=10, value=st.session_state.api_delay, 
+                     help="Add delay between API calls to avoid rate limits")
+    
+    # Save settings to session state
+    if st.button("Save Batch Settings"):
+        st.session_state.batch_size = batch_size
+        st.session_state.api_delay = delay
+        st.success("Batch settings saved!")
+        add_debug(f"Batch settings updated: size={batch_size}, delay={delay}s")
+    
+    # Export/Import excluded terms
+    st.subheader("Export/Import Settings")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Export Excluded Terms"):
+            excluded_terms_data = "\n".join(st.session_state.excluded_terms)
+            st.download_button(
+                label="Download Excluded Terms",
+                data=excluded_terms_data,
+                file_name="excluded_terms.txt",
+                mime="text/plain"
+            )
+    
+    with col2:
+        terms_file = st.file_uploader("Import Excluded Terms", type=['txt'], key="terms_upload")
+        if terms_file is not None:
+            try:
+                content = terms_file.getvalue().decode("utf-8").strip()
+                terms = [line.strip() for line in content.split("\n") if line.strip()]
+                
+                new_terms = [term for term in terms if term not in st.session_state.excluded_terms]
+                if new_terms:
+                    st.session_state.excluded_terms.extend(new_terms)
+                    st.success(f"Added {len(new_terms)} new terms from file")
+                    add_debug(f"Imported {len(new_terms)} excluded terms from file")
+                else:
+                    st.info("No new terms found in file")
+            except Exception as e:
+                st.error(f"Error importing terms: {str(e)}")
+
+# Debug information (expandable section)
+with st.expander("Debug Information"):
+    st.subheader("Debug Log")
+    for log in st.session_state.debug_info:
+        st.text(log)
+    
+    if st.button("Clear Debug Log"):
+        st.session_state.debug_info = []
+        st.experimental_rerun()
+    
+    # Display raw API response if available
+    if st.session_state.api_response:
+        st.subheader("Last API Response")
+        st.json(st.session_state.api_response)
+    
+    st.subheader("Session State")
+    # Show non-sensitive session state info
+    safe_state = {
+        "selected_property": st.session_state.selected_property,
+        "is_generating": st.session_state.is_generating,
+        "progress": st.session_state.progress,
+        "has_api_key": bool(st.session_state.api_key),
+        "selected_model": st.session_state.selected_model,
+        "excluded_terms_count": len(st.session_state.excluded_terms),
+        "example_copies_count": len(st.session_state.example_copies),
+        "content_count": len(st.session_state.generated_content),
+        "has_dataframe": st.session_state.df is not None,
+        "batch_size": st.session_state.batch_size,
+        "api_delay": st.session_state.api_delay
+    }
+    
+    if st.session_state.df is not None:
+        safe_state["dataframe_shape"] = st.session_state.df.shape
+        safe_state["dataframe_columns"] = list(st.session_state.df.columns)
+    
+    st.json(safe_state)
+
+# Help information
+with st.expander("Help & Usage Guide"):
+    st.markdown("""
+    ## Centre Page Content Generator - Usage Guide
+    
+    This application generates professional descriptions for office space properties using AI.
+    
+    ### Main Features
+    
+    1. **Property Data Management**
+       - Upload property data in CSV or Excel format
+       - Each property should include name, location, amenities, etc.
+    
+    2. **Content Customization**
+       - **Excluded Terms**: Add specific terms you want to avoid in the content
+       - **Example Copies**: Upload good examples to guide the AI's style and tone
+       - **Model Selection**: Choose between different Claude models based on quality/speed needs
+    
+    3. **Content Generation**
+       - Generate descriptions for all properties at once
+       - Regenerate individual descriptions as needed
+       - Edit generated content directly in the application
+    
+    4. **Export**
+       - Download all property descriptions as CSV or Excel
+       - Export your excluded terms list for future use
+    
+    ### Using Excluded Terms
+    
+    The "Terms to Avoid" feature helps maintain brand consistency and avoid specific language:
+    - Add terms or phrases you don't want to appear in the generated content
+    - The AI will actively avoid these terms during content creation
+    - Use the content analysis tool to check if any excluded terms appear in the output
+    
+    ### Using Example Copies
+    
+    The example copies feature helps the AI match your preferred style:
+    - Upload or paste examples of well-written property descriptions
+    - The AI will emulate the tone, structure, and style of these examples
+    - More examples = better understanding of your preferred style
+    
+    ### Advanced Settings
+    
+    - **Batch Processing**: Control how many properties are processed at once
+    - **API Delays**: Add time between API calls to avoid rate limits
+    - **Content Analysis**: Check if generated content contains excluded terms
+    """)
+
+# Footer
+st.markdown("---")
+st.caption("Centre Page Content Generator | Developed by MediaVision & Metis")
