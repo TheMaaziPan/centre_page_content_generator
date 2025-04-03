@@ -9,7 +9,7 @@ import anthropic  # Anthropic API client
 
 # Set page config
 st.set_page_config(
-    page_title="Office Space Content Generator",
+    page_title="Centre Page Content Generator",
     page_icon="🏢",
     layout="wide"
 )
@@ -200,7 +200,7 @@ with st.sidebar:
                 st.success(f"Downloaded {export_format} file!")
 
 # Main content area
-st.title("Office Space Content Generator")
+st.title("Centre Page Content Generator")
 
 # API key validation
 if not st.session_state.api_key and 'api_status' not in st.session_state:
@@ -335,34 +335,6 @@ else:
 
 # Footer
 st.divider()
-st.caption("Office Space Content Generator | Developed by Your Company © 2025")
+st.caption("Centre Page Content Generator | Developed by MediaVision & Metis")
 
-# Add information about Anthropic API
-with st.expander("Anthropic API Information"):
-    st.markdown("""
-    ## Using the Anthropic API
-    
-    This application uses the Anthropic Claude API to generate high-quality content for your office space descriptions. To use this functionality:
-    
-    1. **Get an API Key**: Sign up at [Anthropic Console](https://console.anthropic.com/) to get your API key
-    2. **Enter the Key**: Paste your API key in the sidebar field
-    3. **Choose a Model**: 
-       - Claude 3 Sonnet: Balanced quality and speed (recommended)
-       - Claude 3 Opus: Highest quality, more detailed descriptions
-       - Claude 3 Haiku: Fastest, good for bulk generation
-    
-    ### API Usage Costs
-    
-    Anthropic charges based on the number of tokens processed. Each office description may use approximately:
-    - Input: ~500 tokens
-    - Output: ~1,000-1,500 tokens
-    
-    Refer to [Anthropic's pricing page](https://www.anthropic.com/pricing) for current rates.
-    
-    ### Rate Limits
-    
-    The API has rate limits that may affect bulk generation. For large datasets (100+ properties), consider:
-    - Processing in smaller batches
-    - Adding delays between API calls
-    - Using a higher tier API access if available
-    """)
+
