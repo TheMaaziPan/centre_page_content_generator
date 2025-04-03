@@ -289,7 +289,7 @@ with st.sidebar:
             st.session_state.excluded_terms.append(term)
             add_debug(f"Added excluded term: '{term}'")
             st.success(f"Added: '{term}'")
-            st.experimental_rerun()
+            st.rerun()
     
     # Display current terms
     if st.session_state.excluded_terms:
@@ -302,7 +302,7 @@ with st.sidebar:
                 if st.button("🗑️", key=f"del_term_{i}"):
                     st.session_state.excluded_terms.pop(i)
                     add_debug(f"Removed excluded term: '{term}'")
-                    st.experimental_rerun()
+                    st.rerun()
     
     # Add horizontal line
     st.markdown("---")
@@ -319,7 +319,7 @@ with st.sidebar:
                 st.session_state.example_copies.append(content.strip())
                 add_debug(f"Added example from file: {uploaded_example.name} ({len(content)} chars)")
                 st.success(f"Added example from: {uploaded_example.name}")
-                st.experimental_rerun()
+                st.rerun()
         except Exception as e:
             st.error(f"Error loading example file: {str(e)}")
             add_debug(f"Error loading example file: {str(e)}")
@@ -330,7 +330,7 @@ with st.sidebar:
         st.session_state.example_copies.append(example_text.strip())
         add_debug(f"Added example copy ({len(example_text)} chars)")
         st.success("Example added!")
-        st.experimental_rerun()
+        st.rerun()
     
     # Display existing examples
     if st.session_state.example_copies:
@@ -341,7 +341,7 @@ with st.sidebar:
                 if st.button("Remove", key=f"del_example_{i}"):
                     st.session_state.example_copies.pop(i)
                     add_debug(f"Removed example #{i+1}")
-                    st.experimental_rerun()
+                    st.rerun()
                 st.text_area(f"Example content", value=example, height=100, key=f"example_{i}")
     
     # Add horizontal line
@@ -390,7 +390,7 @@ with st.sidebar:
                     
                 # Clear existing generated content
                 st.session_state.generated_content = {}
-                st.experimental_rerun()
+                st.rerun()
         
         if st.session_state.generated_content:
             # Export options
@@ -481,7 +481,7 @@ if st.session_state.is_generating and st.session_state.df is not None:
     status_text.text(f"Generated descriptions for {total_properties} properties!")
     st.session_state.is_generating = False
     add_debug(f"Completed batch generation of {total_properties} properties")
-    st.experimental_rerun()
+    st.rerun()
 
 # Display properties and generated content
 if st.session_state.df is not None:
@@ -497,7 +497,7 @@ if st.session_state.df is not None:
             if st.button(property_name, key=f"prop_{idx}"):
                 st.session_state.selected_property = idx
                 add_debug(f"Selected property: {property_name}")
-                st.experimental_rerun()
+                st.rerun()
     
     with col2:
         st.subheader("Generated Content")
@@ -549,7 +549,7 @@ if st.session_state.df is not None:
                                 st.session_state.df.at[idx, 'Generated Content'] = new_content
                                 st.success("Content regenerated successfully!")
                                 add_debug(f"Regenerated content for {property_name} successfully")
-                                st.experimental_rerun()
+                                st.rerun()
                             except Exception as e:
                                 st.error(f"Error regenerating content: {str(e)}")
                                 add_debug(f"Error during regeneration: {str(e)}")
@@ -568,7 +568,7 @@ if st.session_state.df is not None:
                         st.session_state.df.at[idx, 'Generated Content'] = edited_content
                         st.success("Changes saved!")
                         add_debug(f"Saved edited content for {property_name}")
-                        st.experimental_rerun()
+                        st.rerun()
                         
             else:
                 st.info("No content generated yet. Click the button below to generate content.")
@@ -591,7 +591,7 @@ if st.session_state.df is not None:
                                 st.session_state.df.at[idx, 'Generated Content'] = content
                                 st.success("Content generated successfully!")
                                 add_debug(f"Generated content for {property_name} successfully")
-                                st.experimental_rerun()
+                                st.rerun()
                             except Exception as e:
                                 st.error(f"Error generating content: {str(e)}")
                                 add_debug(f"Error during generation: {str(e)}")
@@ -707,7 +707,7 @@ with st.expander("Debug Information"):
     
     if st.button("Clear Debug Log"):
         st.session_state.debug_info = []
-        st.experimental_rerun()
+        st.rerun()
     
     # Display raw API response if available
     if st.session_state.api_response:
