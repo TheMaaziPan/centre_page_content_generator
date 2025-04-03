@@ -10,7 +10,7 @@ from datetime import datetime
 
 # Set page config
 st.set_page_config(
-    page_title="Office Space Content Generator",
+    page_title="Centre Page Content Generator",
     page_icon="🏢",
     layout="wide"
 )
@@ -289,7 +289,7 @@ with st.sidebar:
                 add_debug(f"Exported data as {export_format}")
 
 # Main content area
-st.title("Office Space Content Generator")
+st.title("Centre Page Content Generator")
 
 # Show Test Mode notice
 if use_mock_api:
@@ -522,4 +522,4 @@ with st.expander("Debug Information"):
 
 # Footer
 st.divider()
-st.caption("Office Space Content Generator | Developed by Your Company © 2025")
+st.caption("Centre Page Content Generator | Developed by MediaVision & Metis")
