@@ -9,7 +9,7 @@ import anthropic  # Anthropic API client
 
 # Set page config
 st.set_page_config(
-    page_title="Centre Page Content Generator",
+    page_title="Office Space Content Generator",
     page_icon="🏢",
     layout="wide"
 )
@@ -66,7 +66,10 @@ def generate_property_description(property_data, api_key):
         - Highlight the premium aspects and unique selling points of the space
         - Include specific details about the neighborhood and local amenities
         
-        Format the content with markdown headings and bullet points where appropriate.
+        IMPORTANT: Format the content with proper markdown headings (# for main heading, ## for subheadings) and bullet points where appropriate.
+        Do NOT include escape characters like \\n in your response - use actual line breaks instead.
+        Do NOT escape markdown symbols - write # not \\#.
+        Structure the content clearly with sections for Executive Summary, Location Advantages, Premium Amenities, Workspace Options, and Call to Action.
         """
         
         # Make API call to Anthropic's Claude
@@ -200,7 +203,7 @@ with st.sidebar:
                 st.success(f"Downloaded {export_format} file!")
 
 # Main content area
-st.title("Centre Page Content Generator")
+st.title("Office Space Content Generator")
 
 # API key validation
 if not st.session_state.api_key and 'api_status' not in st.session_state:
@@ -270,7 +273,13 @@ if st.session_state.df is not None:
             # Display or generate content for selected property
             if idx in st.session_state.generated_content:
                 content = st.session_state.generated_content[idx]
-                st.markdown(content)
+                # Clean up the content to ensure proper markdown rendering
+                # Remove any '\n' escape sequences that might be in the text
+                cleaned_content = content.replace('\\n', '\n')
+                # Remove any extra backslashes before markdown characters
+                cleaned_content = cleaned_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
+                # Display using markdown
+                st.markdown(cleaned_content)
                 
                 # Edit content
                 if st.button("Regenerate", key=f"regen_{idx}"):
@@ -286,7 +295,10 @@ if st.session_state.df is not None:
                             st.session_state.df.at[idx, 'Generated Content'] = new_content
                             st.experimental_rerun()
                 
-                edited_content = st.text_area("Edit Content", value=content, height=400)
+                # Use cleaned content for editing
+                cleaned_content = content.replace('\\n', '\n')
+                cleaned_content = cleaned_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
+                edited_content = st.text_area("Edit Content", value=cleaned_content, height=400)
                 if edited_content != content:
                     if st.button("Save Edits", key=f"save_{idx}"):
                         st.session_state.generated_content[idx] = edited_content
@@ -335,6 +347,4 @@ else:
 
 # Footer
 st.divider()
-st.caption("Centre Page Content Generator | Developed by MediaVision & Metis")
-
-
+st.caption("Office Space Content Generator | Developed by Your Company © 2025")
