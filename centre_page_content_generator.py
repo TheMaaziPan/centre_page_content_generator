@@ -4,6 +4,7 @@ import numpy as np
 import os
 import time
 import json
+import requests
 from io import BytesIO
 from datetime import datetime
 
@@ -29,6 +30,8 @@ if 'is_generating' not in st.session_state:
     st.session_state.is_generating = False
 if 'debug_info' not in st.session_state:
     st.session_state.debug_info = []
+if 'api_response' not in st.session_state:
+    st.session_state.api_response = None
 
 # Function to add debug information
 def add_debug(message):
@@ -37,47 +40,109 @@ def add_debug(message):
     if len(st.session_state.debug_info) > 20:  # Keep only the last 20 messages
         st.session_state.debug_info = st.session_state.debug_info[-20:]
 
-# Mock Anthropic API for testing
-def mock_anthropic_api(prompt, api_key):
-    """Mock function to simulate Anthropic API response"""
-    add_debug("Using mock Anthropic API (for testing only)")
+# Generate high-quality office space content for a property
+def generate_mock_content(property_data):
+    """Generate sample content without API for testing"""
+    property_name = property_data.get('Property Name', 'Premium Office Space')
+    city = property_data.get('City', 'Major City')
+    neighborhood = property_data.get('Neighborhood', 'Business District')
+    address = property_data.get('Address', '123 Main Street')
+    zip_code = property_data.get('Zip Code', '12345')
+    property_type = property_data.get('Property Type', 'Executive Office Space')
+    key_features = property_data.get('Key Features', 'Modern amenities')
+    size_range = property_data.get('Size Range', 'Flexible options')
+    nearby = property_data.get('Nearby Businesses', 'Major corporations')
     
-    # Extract property name from prompt
-    property_name = "Office Space"
-    for line in prompt.split('\n'):
-        if "Property Name:" in line:
-            property_name = line.split("Property Name:")[1].strip()
-            if property_name == "N/A":
-                property_name = "Premium Office Space"
-    
-    # Create a sample response
-    sample_response = f"""# {property_name} | Premium Executive Workspace
+    content = f"""# {property_name} | Premium Workspace in {neighborhood}, {city}
 
 ## Executive Summary
-{property_name} offers a prestigious workspace experience tailored to the discerning needs of executives and business leaders. This premium office environment seamlessly blends sophistication with functionality, providing an inspiring setting that fosters innovation, collaboration, and success.
+Elevate your business operations at {property_name}, a prestigious {property_type} workspace strategically located in {neighborhood}. Offering {size_range} of premium office space, this modern facility provides the ideal environment for companies seeking exceptional workspace solutions in {city}'s thriving business district. With {key_features}, {property_name} delivers an unparalleled professional experience designed for business leaders who demand excellence.
 
 ## Location Advantages
-Strategically situated in a vibrant business district, {property_name} enjoys excellent accessibility and prestigious surroundings. The prime location puts you at the center of business activity with convenient access to major transportation routes, dining options, and business services.
+Positioned at {address} in {zip_code}, {property_name} offers exceptional accessibility in one of {city}'s most sought-after business districts. Your team and clients will appreciate the convenient access to major transportation routes, while being surrounded by {nearby}. The area features premium amenities including upscale dining options and hotels, ensuring all your business hospitality needs are seamlessly accommodated.
 
 ## Premium Amenities
-* **Furnished Private Offices**: Meticulously designed workspaces with premium furnishings
-* **State-of-the-Art Technology**: High-speed internet and advanced telecommunications
-* **Elegant Meeting Rooms**: Professional spaces for client meetings and team collaboration
-* **Business Support Services**: Reception, mail handling, and administrative assistance
-* **Security Features**: 24/7 secure access for peace of mind
+* **State-of-the-Art Technology**: High-speed fiber internet and smart building technology
+* **Professional Meeting Spaces**: Multiple conference rooms with video conferencing capabilities
+* **Exceptional Common Areas**: Elegant reception, luxurious lounges, and gourmet café
+* **Business Support Services**: Mail handling, reception, and administrative assistance
+* **Security & Access**: 24/7 secure access with comprehensive monitoring
+* **Wellness Facilities**: Fitness center and wellness rooms
 
 ## Workspace Options
-Choose from a variety of flexible workspace solutions including private offices, executive suites, and collaborative areas. Each space is designed to accommodate your specific requirements and can be customized to reflect your brand and operational needs.
+Whether your organization requires intimate team spaces or expansive headquarters, {property_name} offers customizable configurations to match your precise requirements:
+
+* **Private Offices**: Prestigious individual workspaces
+* **Executive Suites**: Fully-furnished, move-in ready solutions
+* **Team Workspaces**: Collaborative environments for your entire organization
+* **Flexible Terms**: Adaptable lease options to accommodate growth
 
 ## Call to Action
-Elevate your business presence by securing your space at {property_name}. Contact our dedicated team today to schedule a personalized tour and discover how our exceptional workspace can propel your success.
+Join the distinguished community of business leaders who have established their operations at {property_name}. Contact our dedicated team today to arrange your exclusive tour and discover why {property_name} is the preferred choice for discerning executives in {city}.
 """
-    
-    return sample_response
+    return content
 
-# Function to generate property description (with option to use real or mock API)
+# Function to make direct HTTP request to Anthropic API
+def call_anthropic_api(prompt, api_key):
+    """Make a direct HTTP request to the Anthropic API instead of using the SDK"""
+    add_debug("Making direct HTTP request to Anthropic API")
+    
+    headers = {
+        "x-api-key": api_key,
+        "content-type": "application/json",
+        "anthropic-version": "2023-06-01"
+    }
+    
+    data = {
+        "model": "claude-3-sonnet-20240229",
+        "max_tokens": 1500,
+        "temperature": 0.7,
+        "system": "You are a professional content writer specializing in premium commercial real estate descriptions for executive audiences.",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
+    }
+    
+    try:
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=data
+        )
+        
+        # Save full response for debugging
+        st.session_state.api_response = {
+            "status_code": response.status_code,
+            "headers": dict(response.headers),
+            "response": response.text
+        }
+        
+        if response.status_code != 200:
+            add_debug(f"API Error: Status {response.status_code}, Response: {response.text[:200]}...")
+            return f"API Error: Status {response.status_code}. Please check the debug log for details."
+        
+        response_data = response.json()
+        
+        if "content" in response_data and len(response_data["content"]) > 0:
+            content_list = response_data["content"]
+            all_content = ""
+            for content_item in content_list:
+                if content_item.get("type") == "text":
+                    all_content += content_item.get("text", "")
+            
+            add_debug(f"Successfully extracted content of length: {len(all_content)}")
+            return all_content
+        else:
+            add_debug(f"Empty or invalid response structure: {str(response_data)[:200]}...")
+            return "Error: Empty or invalid API response structure. Please check the debug log."
+            
+    except Exception as e:
+        add_debug(f"Request error: {str(e)}")
+        return f"API request error: {str(e)}"
+
+# Function to generate property description
 def generate_property_description(property_data, api_key, use_mock=False):
-    """Generate property description using Anthropic API or mock for testing"""
+    """Generate property description using direct API call or mock for testing"""
     try:
         # Construct prompt from property data
         prompt = f"""You are a professional content writer for a luxury office space provider.
@@ -120,40 +185,13 @@ def generate_property_description(property_data, api_key, use_mock=False):
         # For debugging, add the prompt to debug info
         add_debug(f"Generated prompt with {len(prompt)} characters")
         
-        # Use mock API for testing or when real API key is not available
+        # Use mock content for testing or when API key is not available
         if use_mock or not api_key:
-            add_debug("API Key empty or mock mode enabled - using mock API")
-            return mock_anthropic_api(prompt, api_key)
+            add_debug("Using mock content generator (Test Mode)")
+            return generate_mock_content(property_data)
             
-        # Use real Anthropic API
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-            add_debug("Initialized Anthropic client")
-            
-            # Make API call to Anthropic's Claude
-            add_debug("Sending request to Anthropic API...")
-            message = client.messages.create(
-                model="claude-3-sonnet-20240229",  # Use the appropriate model version
-                max_tokens=1500,
-                temperature=0.7,
-                system="You are a professional content writer specializing in premium commercial real estate descriptions for executive audiences.",
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            
-            # Extract the generated content from the response
-            add_debug(f"Received response from API with content length: {len(message.content)}")
-            return message.content
-            
-        except ImportError:
-            add_debug("Anthropic module not installed - using mock API")
-            return mock_anthropic_api(prompt, api_key)
-        except Exception as e:
-            add_debug(f"API Error: {str(e)}")
-            # Fall back to mock API on error
-            return mock_anthropic_api(prompt, api_key)
+        # Use direct API call
+        return call_anthropic_api(prompt, api_key)
     
     except Exception as e:
         add_debug(f"Error in generate_property_description: {str(e)}")
@@ -253,10 +291,9 @@ with st.sidebar:
 # Main content area
 st.title("Office Space Content Generator")
 
-# API key validation
-if not st.session_state.api_key and not use_mock_api and 'api_status' not in st.session_state:
-    st.warning("⚠️ Please enter your Anthropic API key in the sidebar to use AI-generated content. Without an API key, enable Test Mode to use sample content.")
-    st.session_state.api_status = "warned"
+# Show Test Mode notice
+if use_mock_api:
+    st.info("🔍 TEST MODE: Using sample content generator (no API calls)")
 
 # Content generation in progress
 if st.session_state.is_generating and st.session_state.df is not None:
@@ -460,6 +497,11 @@ with st.expander("Debug Information"):
     if st.button("Clear Debug Log"):
         st.session_state.debug_info = []
         st.experimental_rerun()
+    
+    # Display raw API response if available
+    if st.session_state.api_response:
+        st.subheader("Last API Response")
+        st.json(st.session_state.api_response)
     
     st.subheader("Session State")
     # Show non-sensitive session state info
