@@ -52,7 +52,7 @@ def add_debug(message):
 
 # Generate high-quality office space content for a property
 def generate_mock_content(property_data):
-    """Generate sample content without API for testing"""
+    """Generate sample shorter content without API for testing"""
     property_name = property_data.get('Property Name', 'Premium Office Space')
     city = property_data.get('City', 'Major City')
     neighborhood = property_data.get('Neighborhood', 'Business District')
@@ -60,35 +60,20 @@ def generate_mock_content(property_data):
     zip_code = property_data.get('Zip Code', '12345')
     property_type = property_data.get('Property Type', 'Executive Office Space')
     key_features = property_data.get('Key Features', 'Modern amenities')
-    size_range = property_data.get('Size Range', 'Flexible options')
-    nearby = property_data.get('Nearby Businesses', 'Major corporations')
     
-    content = f"""# {property_name} | Premium Workspace in {neighborhood}, {city}
+    content = f"""# {property_name} | Premium Workspace in {city}
 
-## Executive Summary
-Elevate your business operations at {property_name}, a prestigious {property_type} workspace strategically located in {neighborhood}. Offering {size_range} of premium office space, this modern facility provides the ideal environment for companies seeking exceptional workspace solutions in {city}'s thriving business district. With {key_features}, {property_name} delivers an unparalleled professional experience designed for business leaders who demand excellence.
+Located at {address} in {neighborhood}, {property_name} offers prestigious {property_type} in a prime {city} location. This professional environment provides an ideal setting for businesses seeking visibility and convenience.
 
-## Location Advantages
-Positioned at {address} in {zip_code}, {property_name} offers exceptional accessibility in one of {city}'s most sought-after business districts. Your team and clients will appreciate the convenient access to major transportation routes, while being surrounded by {nearby}. The area features premium amenities including upscale dining options and hotels, ensuring all your business hospitality needs are seamlessly accommodated.
+Featuring {key_features}, our workspace solutions include private offices, meeting facilities, and flexible administrative support tailored to executive needs.
 
-## Premium Amenities
-* **State-of-the-Art Technology**: High-speed fiber internet and smart building technology
-* **Professional Meeting Spaces**: Multiple conference rooms with video conferencing capabilities
-* **Exceptional Common Areas**: Elegant reception, luxurious lounges, and gourmet café
-* **Business Support Services**: Mail handling, reception, and administrative assistance
-* **Security & Access**: 24/7 secure access with comprehensive monitoring
-* **Wellness Facilities**: Fitness center and wellness rooms
+Key amenities include:
+* High-speed connectivity and modern technology
+* Professional reception and business services
+* Premium meeting spaces with state-of-the-art equipment
+* Convenient access to major transportation routes
 
-## Workspace Options
-Whether your organization requires intimate team spaces or expansive headquarters, {property_name} offers customizable configurations to match your precise requirements:
-
-* **Private Offices**: Prestigious individual workspaces
-* **Executive Suites**: Fully-furnished, move-in ready solutions
-* **Team Workspaces**: Collaborative environments for your entire organization
-* **Flexible Terms**: Adaptable lease options to accommodate growth
-
-## Call to Action
-Join the distinguished community of business leaders who have established their operations at {property_name}. Contact our dedicated team today to arrange your exclusive tour and discover why {property_name} is the preferred choice for discerning executives in {city}.
+Contact us to schedule your exclusive tour and discover why {property_name} is the preferred choice for discerning executives in {city}.
 """
     return content
 
@@ -175,44 +160,47 @@ def generate_property_description(property_data, api_key, model=None, use_mock=F
             
         # Construct prompt from property data
         prompt = f"""You are a professional content writer for a luxury office space provider.
-        Write a premium office space description for executives and business leaders based on the following details:
-        
-        Property Name: {property_data.get('Property Name', 'N/A')}
-        Address: {property_data.get('Address', 'N/A')}
-        City: {property_data.get('City', 'N/A')}
-        Zip Code: {property_data.get('Zip Code', 'N/A')}
-        Neighborhood: {property_data.get('Neighborhood', 'N/A')}
-        Property Type: {property_data.get('Property Type', 'N/A')}
-        Size Range: {property_data.get('Size Range', 'N/A')}
-        Building Description: {property_data.get('Building Description', 'N/A')}
-        Key Features: {property_data.get('Key Features', 'N/A')}
-        Nearby Businesses: {property_data.get('Nearby Businesses', 'N/A')}
-        Transport Access: {property_data.get('Transport Access', 'N/A')}
-        Technology Features: {property_data.get('Technology Features', 'N/A')}
-        Meeting Rooms: {property_data.get('Meeting Rooms', 'N/A')}
-        Common Areas: {property_data.get('Common Areas', 'N/A')}
-        Business Services: {property_data.get('Business Services', 'N/A')}
-        Security Features: {property_data.get('Security Features', 'N/A')}
-        Wellness Amenities: {property_data.get('Wellness Amenities', 'N/A')}
-        Office Configurations: {property_data.get('Office Configurations', 'N/A')}
-        Lease Options: {property_data.get('Lease Options', 'N/A')}
-        Contact Information: {property_data.get('Contact Information', 'N/A')}
-        
-        The content should:
-        - Be between 500-750 words
-        - Have an executive summary, location advantages, amenities section, workspace options, and call to action
-        - Use professional, upscale language appropriate for C-suite executives and their assistants
-        - Highlight the premium aspects and unique selling points of the space
-        - Include specific details about the neighborhood and local amenities
-        
-        IMPORTANT: Format the content with proper markdown headings (# for main heading, ## for subheadings) and bullet points where appropriate.
-        Do NOT include escape characters like \\n in your response - use actual line breaks instead.
-        Do NOT escape markdown symbols - write # not \\#.
-        Structure the content clearly with sections for Executive Summary, Location Advantages, Premium Amenities, Workspace Options, and Call to Action.
-        
-        {excluded_terms_text}
-        {example_copies_text}
-        """
+Write a concise office space description for executives and business leaders based on the following details:
+
+Property Name: {property_data.get('Property Name', 'N/A')}
+Address: {property_data.get('Address', 'N/A')}
+City: {property_data.get('City', 'N/A')}
+Zip Code: {property_data.get('Zip Code', 'N/A')}
+Neighborhood: {property_data.get('Neighborhood', 'N/A')}
+Property Type: {property_data.get('Property Type', 'N/A')}
+Size Range: {property_data.get('Size Range', 'N/A')}
+Building Description: {property_data.get('Building Description', 'N/A')}
+Key Features: {property_data.get('Key Features', 'N/A')}
+Nearby Businesses: {property_data.get('Nearby Businesses', 'N/A')}
+Transport Access: {property_data.get('Transport Access', 'N/A')}
+Technology Features: {property_data.get('Technology Features', 'N/A')}
+Meeting Rooms: {property_data.get('Meeting Rooms', 'N/A')}
+Common Areas: {property_data.get('Common Areas', 'N/A')}
+Business Services: {property_data.get('Business Services', 'N/A')}
+Security Features: {property_data.get('Security Features', 'N/A')}
+Wellness Amenities: {property_data.get('Wellness Amenities', 'N/A')}
+Office Configurations: {property_data.get('Office Configurations', 'N/A')}
+Lease Options: {property_data.get('Lease Options', 'N/A')}
+Contact Information: {property_data.get('Contact Information', 'N/A')}
+
+The content MUST:
+- Be SHORT - approximately 20 lines or less
+- Have a brief headline, followed by 3-4 concise paragraphs
+- Focus only on the most important selling points
+- Use professional, upscale language appropriate for C-suite executives
+- Include location advantages and the top 3-4 amenities
+
+Format the content with:
+- A main heading using # for the property name
+- Very minimal formatting - use plain text for most content
+- At most ONE bullet list with no more than 4 items
+
+IMPORTANT: Be extremely concise. Remove all unnecessary adjectives and descriptions.
+Prioritize brevity above all else while maintaining a professional tone.
+
+{excluded_terms_text}
+{example_copies_text}
+"""
         
         # For debugging, add the prompt to debug info
         add_debug(f"Generated prompt with {len(prompt)} characters, including {len(excluded_terms)} excluded terms and {len(example_copies)} example copies")
