@@ -22,6 +22,8 @@ if 'selected_property' not in st.session_state:
     st.session_state.selected_property = None
 if 'api_key' not in st.session_state:
     st.session_state.api_key = ""
+if 'selected_model' not in st.session_state:
+    st.session_state.selected_model = "claude-3-sonnet-20240229"
 if 'df' not in st.session_state:
     st.session_state.df = None
 if 'progress' not in st.session_state:
@@ -83,9 +85,9 @@ Join the distinguished community of business leaders who have established their 
     return content
 
 # Function to make direct HTTP request to Anthropic API
-def call_anthropic_api(prompt, api_key):
+def call_anthropic_api(prompt, api_key, model="claude-3-sonnet-20240229"):
     """Make a direct HTTP request to the Anthropic API instead of using the SDK"""
-    add_debug("Making direct HTTP request to Anthropic API")
+    add_debug(f"Making direct HTTP request to Anthropic API using model: {model}")
     
     headers = {
         "x-api-key": api_key,
@@ -94,7 +96,7 @@ def call_anthropic_api(prompt, api_key):
     }
     
     data = {
-        "model": "claude-3-sonnet-20240229",
+        "model": model,
         "max_tokens": 1500,
         "temperature": 0.7,
         "system": "You are a professional content writer specializing in premium commercial real estate descriptions for executive audiences.",
@@ -141,9 +143,12 @@ def call_anthropic_api(prompt, api_key):
         return f"API request error: {str(e)}"
 
 # Function to generate property description
-def generate_property_description(property_data, api_key, use_mock=False):
+def generate_property_description(property_data, api_key, model=None, use_mock=False):
     """Generate property description using direct API call or mock for testing"""
     try:
+        if model is None:
+            model = st.session_state.selected_model
+            
         # Construct prompt from property data
         prompt = f"""You are a professional content writer for a luxury office space provider.
         Write a premium office space description for executives and business leaders based on the following details:
@@ -190,8 +195,8 @@ def generate_property_description(property_data, api_key, use_mock=False):
             add_debug("Using mock content generator (Test Mode)")
             return generate_mock_content(property_data)
             
-        # Use direct API call
-        return call_anthropic_api(prompt, api_key)
+        # Use direct API call with selected model
+        return call_anthropic_api(prompt, api_key, model)
     
     except Exception as e:
         add_debug(f"Error in generate_property_description: {str(e)}")
@@ -220,6 +225,22 @@ with st.sidebar:
     if api_key:
         st.session_state.api_key = api_key
         add_debug("API key set (hidden for security)")
+    
+    # Model selection
+    model_options = {
+        "claude-3-sonnet-20240229": "Claude 3 Sonnet (Balanced)",
+        "claude-3-opus-20240229": "Claude 3 Opus (Highest quality)",
+        "claude-3-haiku-20240307": "Claude 3 Haiku (Fastest)"
+    }
+    selected_model = st.selectbox(
+        "Select Claude Model:",
+        options=list(model_options.keys()),
+        format_func=lambda x: model_options[x],
+        index=list(model_options.keys()).index(st.session_state.selected_model) if st.session_state.selected_model in model_options else 0
+    )
+    if selected_model != st.session_state.selected_model:
+        st.session_state.selected_model = selected_model
+        add_debug(f"Model changed to: {selected_model}")
     
     # Testing mode toggle
     use_mock_api = st.checkbox("Test Mode (No API Key Required)", value=not bool(api_key))
@@ -294,6 +315,8 @@ st.title("Centre Page Content Generator")
 # Show Test Mode notice
 if use_mock_api:
     st.info("🔍 TEST MODE: Using sample content generator (no API calls)")
+elif st.session_state.selected_model:
+    st.info(f"Using {model_options.get(st.session_state.selected_model, st.session_state.selected_model)} for content generation")
 
 # Content generation in progress
 if st.session_state.is_generating and st.session_state.df is not None:
@@ -321,6 +344,7 @@ if st.session_state.is_generating and st.session_state.df is not None:
                     content = generate_property_description(
                         property_data, 
                         st.session_state.api_key,
+                        st.session_state.selected_model,
                         use_mock=use_mock_api
                     )
                     st.session_state.generated_content[idx] = content
@@ -394,6 +418,7 @@ if st.session_state.df is not None:
                                 new_content = generate_property_description(
                                     property_data, 
                                     st.session_state.api_key,
+                                    st.session_state.selected_model,
                                     use_mock=use_mock_api
                                 )
                                 st.session_state.generated_content[idx] = new_content
@@ -443,6 +468,7 @@ if st.session_state.df is not None:
                                 content = generate_property_description(
                                     property_data, 
                                     st.session_state.api_key,
+                                    st.session_state.selected_model,
                                     use_mock=use_mock_api
                                 )
                                 st.session_state.generated_content[idx] = content
@@ -510,6 +536,7 @@ with st.expander("Debug Information"):
         "is_generating": st.session_state.is_generating,
         "progress": st.session_state.progress,
         "has_api_key": bool(st.session_state.api_key),
+        "selected_model": st.session_state.selected_model,
         "content_count": len(st.session_state.generated_content),
         "has_dataframe": st.session_state.df is not None,
     }
