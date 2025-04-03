@@ -5,7 +5,7 @@ import os
 import time
 import json
 import requests
-from io import BytesIO
+from io import BytesIO, StringIO
 from datetime import datetime
 
 # Set page config
@@ -34,6 +34,10 @@ if 'debug_info' not in st.session_state:
     st.session_state.debug_info = []
 if 'api_response' not in st.session_state:
     st.session_state.api_response = None
+if 'excluded_terms' not in st.session_state:
+    st.session_state.excluded_terms = []
+if 'example_copies' not in st.session_state:
+    st.session_state.example_copies = []
 
 # Function to add debug information
 def add_debug(message):
@@ -148,6 +152,22 @@ def generate_property_description(property_data, api_key, model=None, use_mock=F
     try:
         if model is None:
             model = st.session_state.selected_model
+        
+        # Get excluded terms
+        excluded_terms = st.session_state.excluded_terms
+        excluded_terms_text = ""
+        if excluded_terms:
+            excluded_terms_text = "IMPORTANT: Do NOT use the following terms or phrases in your content:\n"
+            for i, term in enumerate(excluded_terms):
+                excluded_terms_text += f"{i+1}. \"{term}\"\n"
+        
+        # Get example copies
+        example_copies = st.session_state.example_copies
+        example_copies_text = ""
+        if example_copies:
+            example_copies_text = "\nHere are examples of good copy that you should emulate in style and tone:\n\n"
+            for i, example in enumerate(example_copies):
+                example_copies_text += f"EXAMPLE {i+1}:\n{example}\n\n"
             
         # Construct prompt from property data
         prompt = f"""You are a professional content writer for a luxury office space provider.
@@ -185,10 +205,13 @@ def generate_property_description(property_data, api_key, model=None, use_mock=F
         Do NOT include escape characters like \\n in your response - use actual line breaks instead.
         Do NOT escape markdown symbols - write # not \\#.
         Structure the content clearly with sections for Executive Summary, Location Advantages, Premium Amenities, Workspace Options, and Call to Action.
+        
+        {excluded_terms_text}
+        {example_copies_text}
         """
         
         # For debugging, add the prompt to debug info
-        add_debug(f"Generated prompt with {len(prompt)} characters")
+        add_debug(f"Generated prompt with {len(prompt)} characters, including {len(excluded_terms)} excluded terms and {len(example_copies)} example copies")
         
         # Use mock content for testing or when API key is not available
         if use_mock or not api_key:
@@ -214,6 +237,32 @@ def export_data(df, format_type):
         return output.getvalue()
     else:
         return None
+
+# Function to manage excluded terms
+def add_excluded_term():
+    term = st.session_state.new_excluded_term.strip()
+    if term and term not in st.session_state.excluded_terms:
+        st.session_state.excluded_terms.append(term)
+        add_debug(f"Added excluded term: '{term}'")
+    st.session_state.new_excluded_term = ""
+
+def remove_excluded_term(term):
+    if term in st.session_state.excluded_terms:
+        st.session_state.excluded_terms.remove(term)
+        add_debug(f"Removed excluded term: '{term}'")
+
+# Function to manage example copies
+def add_example_copy():
+    example = st.session_state.new_example_copy.strip()
+    if example:
+        st.session_state.example_copies.append(example)
+        add_debug(f"Added example copy ({len(example)} chars)")
+    st.session_state.new_example_copy = ""
+
+def remove_example_copy(index):
+    if 0 <= index < len(st.session_state.example_copies):
+        removed = st.session_state.example_copies.pop(index)
+        add_debug(f"Removed example copy #{index+1} ({len(removed)} chars)")
 
 # Sidebar - Configuration
 with st.sidebar:
@@ -250,7 +299,59 @@ with st.sidebar:
     
     st.divider()
     
+    # Excluded Terms Setup
+    st.subheader("Terms to Avoid")
+    st.text_input("Add term or phrase to exclude:", key="new_excluded_term", on_change=add_excluded_term)
+    
+    if st.session_state.excluded_terms:
+        st.write("Current excluded terms:")
+        for term in st.session_state.excluded_terms:
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.text(term)
+            with col2:
+                if st.button("🗑️", key=f"del_term_{term}", help="Remove this term"):
+                    remove_excluded_term(term)
+                    st.experimental_rerun()
+    
+    # Example Copies
+    st.divider()
+    st.subheader("Example Content")
+    
+    # Upload example copy file
+    uploaded_example = st.file_uploader("Upload Example Copy", type=['txt'], key="example_upload")
+    if uploaded_example is not None:
+        try:
+            content = uploaded_example.getvalue().decode("utf-8")
+            if content.strip() and content not in st.session_state.example_copies:
+                st.session_state.example_copies.append(content)
+                add_debug(f"Added example from file: {uploaded_example.name} ({len(content)} chars)")
+                st.success(f"Added example from: {uploaded_example.name}")
+        except Exception as e:
+            st.error(f"Error loading example file: {str(e)}")
+            add_debug(f"Error loading example file: {str(e)}")
+    
+    # Example copy text area
+    st.text_area("Or paste example copy here:", key="new_example_copy", height=150)
+    if st.button("Add Example"):
+        add_example_copy()
+        st.experimental_rerun()
+    
+    if st.session_state.example_copies:
+        st.write(f"{len(st.session_state.example_copies)} examples loaded")
+        show_examples = st.expander("View/Edit Examples")
+        with show_examples:
+            for i, example in enumerate(st.session_state.example_copies):
+                st.text(f"Example #{i+1} ({len(example)} chars)")
+                if st.button("Remove", key=f"del_example_{i}"):
+                    remove_example_copy(i)
+                    st.experimental_rerun()
+                st.text_area(f"Example #{i+1}", value=example, height=100, key=f"example_{i}")
+    
+    st.divider()
+    
     # File uploader
+    st.subheader("Property Data")
     uploaded_file = st.file_uploader("Upload Property Data", type=['csv', 'xlsx'])
     
     if uploaded_file is not None:
@@ -274,8 +375,6 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Error loading file: {str(e)}")
             add_debug(f"Error loading file: {str(e)}")
-    
-    st.divider()
     
     # Generation controls
     if st.session_state.df is not None:
@@ -312,11 +411,21 @@ with st.sidebar:
 # Main content area
 st.title("Centre Page Content Generator")
 
-# Show Test Mode notice
-if use_mock_api:
-    st.info("🔍 TEST MODE: Using sample content generator (no API calls)")
-elif st.session_state.selected_model:
-    st.info(f"Using {model_options.get(st.session_state.selected_model, st.session_state.selected_model)} for content generation")
+# Show configuration status
+status_col1, status_col2, status_col3 = st.columns(3)
+with status_col1:
+    if use_mock_api:
+        st.info("🔍 TEST MODE: Using sample content generator")
+    elif st.session_state.selected_model:
+        st.info(f"Using {model_options.get(st.session_state.selected_model, st.session_state.selected_model)}")
+
+with status_col2:
+    if st.session_state.excluded_terms:
+        st.info(f"🚫 {len(st.session_state.excluded_terms)} terms excluded")
+    
+with status_col3:
+    if st.session_state.example_copies:
+        st.info(f"📄 {len(st.session_state.example_copies)} example copies loaded")
 
 # Content generation in progress
 if st.session_state.is_generating and st.session_state.df is not None:
@@ -513,40 +622,3 @@ else:
         file_name="sample_property_template.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-# Debug information (expandable section)
-with st.expander("Debug Information"):
-    st.subheader("Debug Log")
-    for log in st.session_state.debug_info:
-        st.text(log)
-    
-    if st.button("Clear Debug Log"):
-        st.session_state.debug_info = []
-        st.experimental_rerun()
-    
-    # Display raw API response if available
-    if st.session_state.api_response:
-        st.subheader("Last API Response")
-        st.json(st.session_state.api_response)
-    
-    st.subheader("Session State")
-    # Show non-sensitive session state info
-    safe_state = {
-        "selected_property": st.session_state.selected_property,
-        "is_generating": st.session_state.is_generating,
-        "progress": st.session_state.progress,
-        "has_api_key": bool(st.session_state.api_key),
-        "selected_model": st.session_state.selected_model,
-        "content_count": len(st.session_state.generated_content),
-        "has_dataframe": st.session_state.df is not None,
-    }
-    
-    if st.session_state.df is not None:
-        safe_state["dataframe_shape"] = st.session_state.df.shape
-        safe_state["dataframe_columns"] = list(st.session_state.df.columns)
-    
-    st.json(safe_state)
-
-# Footer
-st.divider()
-st.caption("Centre Page Content Generator | Developed by MediaVision & Metis")
