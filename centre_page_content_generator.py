@@ -273,13 +273,19 @@ if st.session_state.df is not None:
             # Display or generate content for selected property
             if idx in st.session_state.generated_content:
                 content = st.session_state.generated_content[idx]
-                # Clean up the content to ensure proper markdown rendering
-                # Remove any '\n' escape sequences that might be in the text
-                cleaned_content = content.replace('\\n', '\n')
-                # Remove any extra backslashes before markdown characters
-                cleaned_content = cleaned_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
-                # Display using markdown
-                st.markdown(cleaned_content)
+                
+                # Safety check to ensure content is a string
+                if content is not None and isinstance(content, str):
+                    # Clean up the content to ensure proper markdown rendering
+                    # Remove any '\n' escape sequences that might be in the text
+                    cleaned_content = content.replace('\\n', '\n')
+                    # Remove any extra backslashes before markdown characters
+                    cleaned_content = cleaned_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
+                    # Display using markdown
+                    st.markdown(cleaned_content)
+                else:
+                    st.error("Content appears to be empty or invalid. Please try regenerating.")
+                    content = ""  # Set a default empty string
                 
                 # Edit content
                 if st.button("Regenerate", key=f"regen_{idx}"):
@@ -296,9 +302,12 @@ if st.session_state.df is not None:
                             st.experimental_rerun()
                 
                 # Use cleaned content for editing
-                cleaned_content = content.replace('\\n', '\n')
-                cleaned_content = cleaned_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
-                edited_content = st.text_area("Edit Content", value=cleaned_content, height=400)
+                if content is not None and isinstance(content, str):
+                    cleaned_content = content.replace('\\n', '\n')
+                    cleaned_content = cleaned_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
+                    edited_content = st.text_area("Edit Content", value=cleaned_content, height=400)
+                else:
+                    edited_content = st.text_area("Edit Content", value="", height=400)
                 if edited_content != content:
                     if st.button("Save Edits", key=f"save_{idx}"):
                         st.session_state.generated_content[idx] = edited_content
@@ -348,3 +357,33 @@ else:
 # Footer
 st.divider()
 st.caption("Office Space Content Generator | Developed by Your Company © 2025")
+
+# Add information about Anthropic API
+with st.expander("Anthropic API Information"):
+    st.markdown("""
+    ## Using the Anthropic API
+    
+    This application uses the Anthropic Claude API to generate high-quality content for your office space descriptions. To use this functionality:
+    
+    1. **Get an API Key**: Sign up at [Anthropic Console](https://console.anthropic.com/) to get your API key
+    2. **Enter the Key**: Paste your API key in the sidebar field
+    3. **Choose a Model**: 
+       - Claude 3 Sonnet: Balanced quality and speed (recommended)
+       - Claude 3 Opus: Highest quality, more detailed descriptions
+       - Claude 3 Haiku: Fastest, good for bulk generation
+    
+    ### API Usage Costs
+    
+    Anthropic charges based on the number of tokens processed. Each office description may use approximately:
+    - Input: ~500 tokens
+    - Output: ~1,000-1,500 tokens
+    
+    Refer to [Anthropic's pricing page](https://www.anthropic.com/pricing) for current rates.
+    
+    ### Rate Limits
+    
+    The API has rate limits that may affect bulk generation. For large datasets (100+ properties), consider:
+    - Processing in smaller batches
+    - Adding delays between API calls
+    - Using a higher tier API access if available
+    """)
