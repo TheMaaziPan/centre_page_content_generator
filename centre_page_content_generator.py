@@ -4,7 +4,6 @@ import numpy as np
 import os
 import time
 from io import BytesIO
-import anthropic
 from datetime import datetime
 
 # Set page config
@@ -19,8 +18,6 @@ if 'generated_content' not in st.session_state:
     st.session_state.generated_content = {}
 if 'selected_property' not in st.session_state:
     st.session_state.selected_property = None
-if 'api_key' not in st.session_state:
-    st.session_state.api_key = ""
 if 'df' not in st.session_state:
     st.session_state.df = None
 if 'progress' not in st.session_state:
@@ -28,59 +25,63 @@ if 'progress' not in st.session_state:
 if 'is_generating' not in st.session_state:
     st.session_state.is_generating = False
 
-# Function to generate content using Anthropic API
-def generate_property_description(property_data, api_key):
-    """Generate property description using Anthropic API"""
+# Function to generate property description
+# This is a mock function that will be replaced with actual AI implementation
+def generate_property_description(property_data):
+    """Generate property description using a template approach"""
     try:
-        client = anthropic.Anthropic(api_key=api_key)
+        # Extract key properties with fallbacks to prevent errors
+        property_name = property_data.get('Property Name', 'Office Space')
+        city = property_data.get('City', 'City')
+        zip_code = property_data.get('Zip Code', '')
+        neighborhood = property_data.get('Neighborhood', 'Business District')
+        property_type = property_data.get('Property Type', 'Commercial Space')
+        size_range = property_data.get('Size Range', 'Flexible square footage')
+        building_desc = property_data.get('Building Description', 'Modern building')
+        key_features = property_data.get('Key Features', 'Multiple amenities')
+        nearby = property_data.get('Nearby Businesses', 'Local businesses')
+        transport = property_data.get('Transport Access', 'Convenient access')
+        tech = property_data.get('Technology Features', 'Modern technology')
+        meeting_rooms = property_data.get('Meeting Rooms', 'Conference facilities')
+        common_areas = property_data.get('Common Areas', 'Shared spaces')
+        business_services = property_data.get('Business Services', 'Support services')
+        security = property_data.get('Security Features', 'Secure access')
+        wellness = property_data.get('Wellness Amenities', 'Wellness options')
+        configurations = property_data.get('Office Configurations', 'Flexible layouts')
+        lease_options = property_data.get('Lease Options', 'Various terms available')
+        contact = property_data.get('Contact Information', 'Contact our team')
         
-        # Construct prompt from property data
-        prompt = f"""You are a professional content writer for a luxury office space provider.
-        Write a premium office space description for executives and business leaders based on the following details:
-        
-        Property Name: {property_data.get('Property Name', 'N/A')}
-        Address: {property_data.get('Address', 'N/A')}
-        City: {property_data.get('City', 'N/A')}
-        Zip Code: {property_data.get('Zip Code', 'N/A')}
-        Neighborhood: {property_data.get('Neighborhood', 'N/A')}
-        Property Type: {property_data.get('Property Type', 'N/A')}
-        Size Range: {property_data.get('Size Range', 'N/A')}
-        Building Description: {property_data.get('Building Description', 'N/A')}
-        Key Features: {property_data.get('Key Features', 'N/A')}
-        Nearby Businesses: {property_data.get('Nearby Businesses', 'N/A')}
-        Transport Access: {property_data.get('Transport Access', 'N/A')}
-        Technology Features: {property_data.get('Technology Features', 'N/A')}
-        Meeting Rooms: {property_data.get('Meeting Rooms', 'N/A')}
-        Common Areas: {property_data.get('Common Areas', 'N/A')}
-        Business Services: {property_data.get('Business Services', 'N/A')}
-        Security Features: {property_data.get('Security Features', 'N/A')}
-        Wellness Amenities: {property_data.get('Wellness Amenities', 'N/A')}
-        Office Configurations: {property_data.get('Office Configurations', 'N/A')}
-        Lease Options: {property_data.get('Lease Options', 'N/A')}
-        Contact Information: {property_data.get('Contact Information', 'N/A')}
-        
-        The content should:
-        - Be between 500-750 words
-        - Have an executive summary, location advantages, amenities section, workspace options, and call to action
-        - Use professional, upscale language appropriate for C-suite executives and their assistants
-        - Highlight the premium aspects and unique selling points of the space
-        - Include specific details about the neighborhood and local amenities
-        
-        Format the content with markdown headings and bullet points where appropriate.
-        """
-        
-        # Make API call
-        message = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=1500,
-            temperature=0.7,
-            system="You are a professional content writer specializing in premium commercial real estate descriptions.",
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        
-        return message.content
+        # Template-based content generation
+        content = f"""# {property_name} | Premium Workspace in {neighborhood}, {city}
+
+## Executive Summary
+Elevate your business operations at {property_name}, a prestigious {property_type} workspace strategically located in {neighborhood}. Offering {size_range} of premium office space, this {building_desc} provides the ideal environment for companies seeking exceptional workspace solutions in {city}'s thriving business district. With {key_features}, {property_name} delivers an unparalleled professional experience designed for business leaders who demand excellence.
+
+## Prime Location Advantage
+Positioned in {zip_code}, {property_name} offers exceptional accessibility in one of {city}'s most sought-after business districts. Your team and clients will appreciate the convenient {transport}, while being surrounded by {nearby}. The area features premium amenities including upscale dining options and hotels, ensuring all your business hospitality needs are seamlessly accommodated.
+
+## Executive Amenities & Services
+{property_name} features a comprehensive suite of premium amenities tailored to executive needs:
+
+* **State-of-the-Art Technology**: {tech} ensuring seamless connectivity and performance
+* **Professional Meeting Spaces**: {meeting_rooms} equipped with modern presentation tools
+* **Exceptional Common Areas**: {common_areas}
+* **Business Support Services**: {business_services}
+* **Security & Access**: {security}
+* **Wellness Facilities**: {wellness} promoting executive well-being
+
+## Flexible Workspace Solutions
+Whether your organization requires intimate team spaces or expansive headquarters, {property_name} offers customizable configurations to match your precise requirements:
+
+* **Private Offices**: Premium private workspaces
+* **Executive Suites**: {configurations}
+* **Team Workspaces**: Collaborative environments designed for productivity and engagement
+* **Flexible Terms**: {lease_options}
+
+## Secure Your Premium {city} Workspace
+Join the distinguished community of business leaders who have established their operations at {property_name}. Contact our dedicated team at {contact} to arrange your exclusive tour and discover why {property_name} is the preferred choice for discerning executives in {city}.
+"""
+        return content
     
     except Exception as e:
         return f"Error generating content: {str(e)}"
@@ -102,11 +103,6 @@ def export_data(df, format_type):
 with st.sidebar:
     st.image("https://via.placeholder.com/150x50?text=Office+Space", width=200)
     st.title("Content Generator")
-    
-    # API Key input
-    api_key = st.text_input("Enter Anthropic API Key:", type="password", value=st.session_state.api_key)
-    if api_key:
-        st.session_state.api_key = api_key
     
     st.divider()
     
@@ -135,18 +131,15 @@ with st.sidebar:
     # Generation controls
     if st.session_state.df is not None:
         if st.button("Generate All Descriptions"):
-            if not st.session_state.api_key:
-                st.error("Please enter API key first")
-            else:
-                st.session_state.is_generating = True
-                st.session_state.progress = 0
+            st.session_state.is_generating = True
+            st.session_state.progress = 0
+            
+            # Add content column if it doesn't exist
+            if 'Generated Content' not in st.session_state.df:
+                st.session_state.df['Generated Content'] = np.nan
                 
-                # Add content column if it doesn't exist
-                if 'Generated Content' not in st.session_state.df:
-                    st.session_state.df['Generated Content'] = np.nan
-                    
-                # Clear existing generated content
-                st.session_state.generated_content = {}
+            # Clear existing generated content
+            st.session_state.generated_content = {}
         
         if st.session_state.generated_content:
             # Export options
@@ -180,7 +173,7 @@ if st.session_state.is_generating and st.session_state.df is not None:
         # Generate content if not already generated
         if idx not in st.session_state.generated_content:
             property_data = row.to_dict()
-            content = generate_property_description(property_data, st.session_state.api_key)
+            content = generate_property_description(property_data)
             st.session_state.generated_content[idx] = content
             st.session_state.df.at[idx, 'Generated Content'] = content
         
@@ -222,7 +215,7 @@ if st.session_state.df is not None:
                 # Edit content
                 if st.button("Regenerate", key=f"regen_{idx}"):
                     with st.spinner("Regenerating content..."):
-                        new_content = generate_property_description(property_data, st.session_state.api_key)
+                        new_content = generate_property_description(property_data)
                         st.session_state.generated_content[idx] = new_content
                         st.session_state.df.at[idx, 'Generated Content'] = new_content
                         st.experimental_rerun()
@@ -237,7 +230,7 @@ if st.session_state.df is not None:
             else:
                 if st.button("Generate Description", key=f"gen_{idx}"):
                     with st.spinner("Generating content..."):
-                        content = generate_property_description(property_data, st.session_state.api_key)
+                        content = generate_property_description(property_data)
                         st.session_state.generated_content[idx] = content
                         st.session_state.df.at[idx, 'Generated Content'] = content
                         st.experimental_rerun()
@@ -271,3 +264,43 @@ else:
 # Footer
 st.divider()
 st.caption("Office Space Content Generator | Developed by Your Company © 2025")
+
+# Add notes about integrating with AI services
+with st.expander("Integration Notes"):
+    st.markdown("""
+    ## AI Integration Options
+    
+    This demo uses a template-based approach for content generation. In production, you would integrate with an AI service:
+    
+    1. **OpenAI API**: Use GPT models for text generation
+    2. **Anthropic API**: Use Claude models for nuanced business writing
+    3. **Cohere or AI21**: Alternative enterprise-focused AI providers
+    
+    ### Implementation Steps
+    
+    1. Add your chosen AI provider's SDK to requirements.txt
+    2. Replace the `generate_property_description()` function with API calls
+    3. Add appropriate API key management and rate limiting
+    4. Consider batch processing for large datasets
+    
+    ### Example Integration Code
+    
+    ```python
+    # Example OpenAI integration
+    from openai import OpenAI
+    
+    def generate_with_openai(property_data, api_key):
+        client = OpenAI(api_key=api_key)
+        
+        prompt = f"Write a premium office space description for {property_data['Property Name']}..."
+        
+        response = client.completions.create(
+            model="gpt-4",
+            prompt=prompt,
+            max_tokens=1000,
+            temperature=0.7
+        )
+        
+        return response.choices[0].text
+    ```
+    """)
