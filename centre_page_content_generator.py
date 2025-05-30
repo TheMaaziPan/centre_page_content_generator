@@ -10,7 +10,7 @@ from datetime import datetime
 
 # Set page config
 st.set_page_config(
-    page_title="Centre Page Content Generator",
+    page_title="Centre Page Content Generator - SEO Enhanced",
     page_icon="🏢",
     layout="wide"
 )
@@ -42,6 +42,10 @@ if 'batch_size' not in st.session_state:
     st.session_state.batch_size = 5
 if 'api_delay' not in st.session_state:
     st.session_state.api_delay = 1
+if 'target_keywords' not in st.session_state:
+    st.session_state.target_keywords = ['office space', 'executive office', 'workspace']
+if 'meta_descriptions' not in st.session_state:
+    st.session_state.meta_descriptions = {}
 
 # Function to add debug information
 def add_debug(message):
@@ -49,6 +53,135 @@ def add_debug(message):
     st.session_state.debug_info.append(f"[{timestamp}] {message}")
     if len(st.session_state.debug_info) > 20:  # Keep only the last 20 messages
         st.session_state.debug_info = st.session_state.debug_info[-20:]
+
+# SEO Analysis Functions
+def analyze_seo_quality(content, property_data):
+    """Analyze content for SEO best practices"""
+    if not content:
+        return {}
+    
+    analysis = {
+        "word_count": len(content.split()),
+        "has_address": property_data.get('Address', '') in content if property_data.get('Address') else False,
+        "location_mentions": content.lower().count(property_data.get('City', '').lower()) if property_data.get('City') else 0,
+        "keyword_density": {},
+        "readability_score": None,
+        "has_cta": any(cta in content.lower() for cta in ['contact', 'schedule', 'book', 'visit', 'tour', 'call']),
+        "paragraph_count": len([p for p in content.split('\n\n') if p.strip()]),
+        "has_h1": content.strip().startswith('#'),
+        "seo_score": 0
+    }
+    
+    # Calculate keyword density for important terms
+    keywords = st.session_state.target_keywords + ['meeting room', 'business', property_data.get('City', ''), property_data.get('Neighborhood', '')]
+    for keyword in keywords:
+        if keyword:
+            count = content.lower().count(keyword.lower())
+            density = (count / len(content.split())) * 100 if content else 0
+            analysis["keyword_density"][keyword] = {
+                "count": count,
+                "density": f"{density:.1f}%"
+            }
+    
+    # Simple readability check (average sentence length)
+    sentences = [s for s in content.split('.') if s.strip()]
+    avg_sentence_length = sum(len(s.split()) for s in sentences) / len(sentences) if sentences else 0
+    analysis["avg_sentence_length"] = round(avg_sentence_length, 1)
+    analysis["readability_score"] = "Good" if avg_sentence_length < 20 else "Complex"
+    
+    # Calculate SEO score
+    score = 0
+    if 150 <= analysis['word_count'] <= 300:
+        score += 20
+    if analysis['has_address']:
+        score += 20
+    if analysis['location_mentions'] >= 2:
+        score += 20
+    if analysis['has_cta']:
+        score += 20
+    if analysis['has_h1']:
+        score += 10
+    if analysis['readability_score'] == 'Good':
+        score += 10
+    
+    analysis['seo_score'] = score
+    
+    return analysis
+
+def generate_meta_description(property_data, content):
+    """Generate SEO-friendly meta description"""
+    property_name = property_data.get('Property Name', 'Office Space')
+    city = property_data.get('City', '')
+    neighborhood = property_data.get('Neighborhood', '')
+    
+    # Extract key features from content
+    features = []
+    feature_keywords = {
+        'meeting': 'meeting rooms',
+        'parking': 'parking',
+        '24/7': '24/7 access',
+        'security': 'secure access',
+        'wifi': 'high-speed internet',
+        'furnished': 'furnished offices',
+        'flexible': 'flexible terms'
+    }
+    
+    for keyword, feature in feature_keywords.items():
+        if keyword in content.lower():
+            features.append(feature)
+    
+    features_text = ', '.join(features[:2]) if features else 'premium amenities'
+    
+    # Build meta description
+    if neighborhood and city:
+        meta = f"{property_name} in {neighborhood}, {city}. Professional office space with {features_text}. Schedule your tour today."
+    elif city:
+        meta = f"{property_name} in {city}. Executive office space featuring {features_text}. Contact us for availability."
+    else:
+        meta = f"{property_name} - Premium office space with {features_text}. Book your viewing today."
+    
+    # Ensure it's under 160 characters
+    if len(meta) > 160:
+        meta = meta[:157] + "..."
+    
+    return meta
+
+def generate_schema_markup(property_data):
+    """Generate Schema.org structured data for local SEO"""
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "OfficeSpace",
+        "name": property_data.get('Property Name', ''),
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": property_data.get('Address', ''),
+            "addressLocality": property_data.get('City', ''),
+            "postalCode": property_data.get('Zip Code', ''),
+            "addressRegion": property_data.get('State', ''),
+            "addressCountry": "US"
+        },
+        "description": property_data.get('Building Description', ''),
+        "amenityFeature": []
+    }
+    
+    # Add geo coordinates if available
+    if property_data.get('Latitude') and property_data.get('Longitude'):
+        schema["geo"] = {
+            "@type": "GeoCoordinates",
+            "latitude": property_data.get('Latitude', ''),
+            "longitude": property_data.get('Longitude', '')
+        }
+    
+    # Add amenities
+    amenities = property_data.get('Key Features', '').split(',')
+    for amenity in amenities:
+        if amenity.strip():
+            schema["amenityFeature"].append({
+                "@type": "LocationFeatureSpecification",
+                "name": amenity.strip()
+            })
+    
+    return json.dumps(schema, indent=2)
 
 # Generate high-quality office space content for a property
 def generate_mock_content(property_data):
@@ -61,20 +194,16 @@ def generate_mock_content(property_data):
     property_type = property_data.get('Property Type', 'Executive Office Space')
     key_features = property_data.get('Key Features', 'Modern amenities')
     
-    content = f"""# {property_name} | Premium Workspace in {city}
+    content = f"""# {property_name} - Office Space in {city}
 
-Located at {address} in {neighborhood}, {property_name} offers prestigious {property_type} in a prime {city} location. This professional environment provides an ideal setting for businesses seeking visibility and convenience.
+Located at {address} in the heart of {neighborhood}, {property_name} offers premium {property_type} for businesses seeking a prestigious {city} location. This professional workspace combines convenience with sophisticated amenities.
 
-Featuring {key_features}, our workspace solutions include private offices, meeting facilities, and flexible administrative support tailored to executive needs.
+Our {neighborhood} office space features {key_features}, including private offices, modern meeting rooms, and flexible workspace solutions. With high-speed connectivity and professional support services, your business will thrive in this dynamic environment.
 
-Key amenities include:
-* High-speed connectivity and modern technology
-* Professional reception and business services
-* Premium meeting spaces with state-of-the-art equipment
-* Convenient access to major transportation routes
+Key benefits of this {city} office space include convenient parking, 24/7 secure access, and proximity to major transportation routes. The building offers stunning views and natural light throughout.
 
-Contact us to schedule your exclusive tour and discover why {property_name} is the preferred choice for discerning executives in {city}.
-"""
+Schedule your tour of {property_name} today and discover why leading businesses choose our {neighborhood} location. Contact us now to explore available office space options."""
+    
     return content
 
 # Function to make direct HTTP request to Anthropic API
@@ -92,7 +221,7 @@ def call_anthropic_api(prompt, api_key, model="claude-3-sonnet-20240229"):
         "model": model,
         "max_tokens": 1500,
         "temperature": 0.7,
-        "system": "You are a professional content writer specializing in premium commercial real estate descriptions for executive audiences.",
+        "system": "You are an SEO content specialist writing optimized commercial real estate descriptions that rank well on Google.",
         "messages": [
             {"role": "user", "content": prompt}
         ]
@@ -146,7 +275,7 @@ def generate_property_description(property_data, api_key, model=None, use_mock=F
         excluded_terms = st.session_state.excluded_terms
         excluded_terms_text = ""
         if excluded_terms:
-            excluded_terms_text = "IMPORTANT: Do NOT use the following terms or phrases in your content:\n"
+            excluded_terms_text = "\n\nIMPORTANT: Do NOT use the following terms or phrases in your content:\n"
             for i, term in enumerate(excluded_terms):
                 excluded_terms_text += f"{i+1}. \"{term}\"\n"
         
@@ -154,14 +283,18 @@ def generate_property_description(property_data, api_key, model=None, use_mock=F
         example_copies = st.session_state.example_copies
         example_copies_text = ""
         if example_copies:
-            example_copies_text = "\nHere are examples of good copy that you should emulate in style and tone:\n\n"
+            example_copies_text = "\n\nHere are examples of good copy that you should emulate in style and tone:\n\n"
             for i, example in enumerate(example_copies):
                 example_copies_text += f"EXAMPLE {i+1}:\n{example}\n\n"
+        
+        # Get target keywords
+        target_keywords = ', '.join(st.session_state.target_keywords) if st.session_state.target_keywords else 'office space, executive office'
             
-        # Construct prompt from property data
-        prompt = f"""You are a professional content writer for a luxury office space provider.
-Write a concise office space description for executives and business leaders based on the following details:
+        # Enhanced SEO-focused prompt
+        prompt = f"""You are an SEO content specialist writing for a luxury office space provider.
+Create a Google-optimized office space description that will rank well in search results.
 
+Property Details:
 Property Name: {property_data.get('Property Name', 'N/A')}
 Address: {property_data.get('Address', 'N/A')}
 City: {property_data.get('City', 'N/A')}
@@ -183,27 +316,42 @@ Office Configurations: {property_data.get('Office Configurations', 'N/A')}
 Lease Options: {property_data.get('Lease Options', 'N/A')}
 Contact Information: {property_data.get('Contact Information', 'N/A')}
 
-The content MUST:
-- Be SHORT - approximately 20 lines or less
-- Have a brief headline, followed by 3-4 concise paragraphs
-- Focus only on the most important selling points
-- Use professional, upscale language appropriate for C-suite executives
-- Include location advantages and the top 3-4 amenities
+Target Keywords: {target_keywords}
 
-Format the content with:
-- A main heading using # for the property name
-- Very minimal formatting - use plain text for most content
-- At most ONE bullet list with no more than 4 items
+SEO Requirements:
+1. Start with a compelling H1 title that includes the property name, "Office Space" and location
+2. Include the full address naturally in the first paragraph
+3. Use location-based keywords (city, neighborhood) 2-3 times naturally throughout
+4. Include "office space" or "executive office" variations 2-3 times
+5. Mention specific amenities and features using semantic keywords
+6. Keep content between 150-300 words for optimal engagement
+7. Use short paragraphs (2-3 sentences max) for readability
+8. Include a clear call-to-action in the final paragraph
+9. Write in active voice and present tense
+10. Focus on benefits rather than just features
+11. Include local landmarks or nearby businesses if relevant
 
-IMPORTANT: Be extremely concise. Remove all unnecessary adjectives and descriptions.
-Prioritize brevity above all else while maintaining a professional tone.
+Content Structure:
+- H1 Title using # (include property name + "Office Space" + location)
+- Opening paragraph with address and main value proposition
+- 2-3 short paragraphs highlighting key features and benefits
+- Closing paragraph with clear CTA (Schedule tour, Contact us, etc.)
+
+Write naturally for humans first, search engines second. Avoid:
+- Keyword stuffing or unnatural repetition
+- Generic phrases like "state-of-the-art" or "premier location"
+- Long, complex sentences
+- Passive voice
+- Overly promotional language
+- More than 4 bullet points if using a list
 
 {excluded_terms_text}
 {example_copies_text}
-"""
+
+Write the SEO-optimized content now:"""
         
         # For debugging, add the prompt to debug info
-        add_debug(f"Generated prompt with {len(prompt)} characters, including {len(excluded_terms)} excluded terms and {len(example_copies)} example copies")
+        add_debug(f"Generated SEO-enhanced prompt with {len(prompt)} characters")
         
         # Use mock content for testing or when API key is not available
         if use_mock or not api_key:
@@ -218,14 +366,38 @@ Prioritize brevity above all else while maintaining a professional tone.
         return f"Error generating content: {str(e)}"
 
 # Function to export data with generated content
-def export_data(df, format_type):
-    """Export dataframe with generated content"""
+def export_data(df, format_type, include_seo=False):
+    """Export dataframe with generated content and optional SEO data"""
+    export_df = df.copy()
+    
+    if include_seo and 'Generated Content' in df.columns:
+        # Add SEO columns
+        export_df['Meta Description'] = ''
+        export_df['Word Count'] = ''
+        export_df['SEO Score'] = ''
+        export_df['Has CTA'] = ''
+        export_df['Location Mentions'] = ''
+        
+        for idx, row in df.iterrows():
+            content = row.get('Generated Content', '')
+            if content and isinstance(content, str):
+                # Generate meta description
+                meta_desc = generate_meta_description(row.to_dict(), content)
+                export_df.at[idx, 'Meta Description'] = meta_desc
+                
+                # SEO analysis
+                seo_analysis = analyze_seo_quality(content, row.to_dict())
+                export_df.at[idx, 'Word Count'] = seo_analysis.get('word_count', 0)
+                export_df.at[idx, 'SEO Score'] = f"{seo_analysis.get('seo_score', 0)}%"
+                export_df.at[idx, 'Has CTA'] = 'Yes' if seo_analysis.get('has_cta', False) else 'No'
+                export_df.at[idx, 'Location Mentions'] = seo_analysis.get('location_mentions', 0)
+    
     if format_type == 'csv':
-        return df.to_csv(index=False).encode('utf-8')
+        return export_df.to_csv(index=False).encode('utf-8')
     elif format_type == 'excel':
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, sheet_name='Property Descriptions', index=False)
+            export_df.to_excel(writer, sheet_name='Property Descriptions', index=False)
         return output.getvalue()
     else:
         return None
@@ -266,8 +438,45 @@ with st.sidebar:
     # Add horizontal line
     st.markdown("---")
     
+    # SEO Settings
+    st.subheader("🎯 SEO Settings")
+    
+    # Target keywords
+    keywords_text = st.text_area(
+        "Target Keywords (one per line):",
+        value='\n'.join(st.session_state.target_keywords),
+        height=100,
+        help="These keywords will be naturally incorporated into the content"
+    )
+    if keywords_text:
+        new_keywords = [k.strip() for k in keywords_text.split('\n') if k.strip()]
+        if new_keywords != st.session_state.target_keywords:
+            st.session_state.target_keywords = new_keywords
+            add_debug(f"Updated target keywords: {len(new_keywords)} keywords")
+    
+    # SEO Tips
+    with st.expander("📚 SEO Best Practices"):
+        st.markdown("""
+        **Google-Friendly Content Tips:**
+        - ✅ Include full address early
+        - ✅ Use location 2-3 times naturally
+        - ✅ Keep content 150-300 words
+        - ✅ Short paragraphs (2-3 sentences)
+        - ✅ Clear call-to-action
+        - ✅ Specific amenities mentioned
+        - ✅ Local landmarks if relevant
+        - ✅ Active voice throughout
+        - ✅ Focus on user benefits
+        - ❌ Avoid keyword stuffing
+        - ❌ No generic phrases
+        - ❌ No complex sentences
+        """)
+    
+    # Add horizontal line
+    st.markdown("---")
+    
     # Excluded Terms Setup
-    st.subheader("Terms to Avoid")
+    st.subheader("🚫 Terms to Avoid")
     
     # Add term input
     new_term = st.text_input("Add term or phrase to exclude:")
@@ -296,7 +505,7 @@ with st.sidebar:
     st.markdown("---")
     
     # Example Content section
-    st.subheader("Example Content")
+    st.subheader("📄 Example Content")
     
     # Upload example copy file
     uploaded_example = st.file_uploader("Upload Example Copy", type=['txt'])
@@ -330,13 +539,13 @@ with st.sidebar:
                     st.session_state.example_copies.pop(i)
                     add_debug(f"Removed example #{i+1}")
                     st.rerun()
-                st.text_area(f"Example content", value=example, height=100, key=f"example_{i}")
+                st.text_area(f"Example content", value=example, height=100, key=f"example_{i}", disabled=True)
     
     # Add horizontal line
     st.markdown("---")
     
     # File uploader
-    st.subheader("Property Data")
+    st.subheader("📊 Property Data")
     uploaded_file = st.file_uploader("Upload Property Data", type=['csv', 'xlsx'])
     
     if uploaded_file is not None:
@@ -360,10 +569,36 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Error loading file: {str(e)}")
             add_debug(f"Error loading file: {str(e)}")
+
+# Main content area
+st.title("🏢 Centre Page Content Generator - SEO Enhanced")
+
+# Show configuration status
+status_col1, status_col2, status_col3, status_col4 = st.columns(4)
+with status_col1:
+    if use_mock_api:
+        st.info("🔍 TEST MODE")
+    elif st.session_state.selected_model:
+        st.info(f"🤖 {st.session_state.selected_model.split('-')[2].title()}")
+
+with status_col2:
+    if st.session_state.excluded_terms:
+        st.info(f"🚫 {len(st.session_state.excluded_terms)} excluded")
     
-    # Generation controls
-    if st.session_state.df is not None:
-        if st.button("Generate All Descriptions"):
+with status_col3:
+    if st.session_state.example_copies:
+        st.info(f"📄 {len(st.session_state.example_copies)} examples")
+
+with status_col4:
+    if st.session_state.target_keywords:
+        st.info(f"🎯 {len(st.session_state.target_keywords)} keywords")
+
+# Generation controls
+if st.session_state.df is not None:
+    col1, col2, col3 = st.columns([2, 2, 3])
+    
+    with col1:
+        if st.button("🚀 Generate All Descriptions", type="primary", use_container_width=True):
             if not st.session_state.api_key and not use_mock_api:
                 st.error("Please enter Anthropic API key first or enable Test Mode")
                 add_debug("Generation failed - no API key and test mode disabled")
@@ -379,39 +614,50 @@ with st.sidebar:
                 # Clear existing generated content
                 st.session_state.generated_content = {}
                 st.rerun()
-        
+    
+    with col2:
+        if st.session_state.generated_content:
+            # Check for excluded terms
+            if st.button("🔍 Check Excluded Terms", use_container_width=True):
+                found_terms = {}
+                for idx, row in st.session_state.df.iterrows():
+                    content = st.session_state.generated_content.get(idx, '')
+                    if content and isinstance(content, str):
+                        property_name = row.get('Property Name', f'Property #{idx}')
+                        found_in_this_property = []
+                        
+                        for term in st.session_state.excluded_terms:
+                            if term.lower() in content.lower():
+                                found_in_this_property.append(term)
+                        
+                        if found_in_this_property:
+                            found_terms[property_name] = found_in_this_property
+                
+                if found_terms:
+                    st.error("Found excluded terms:")
+                    for property_name, terms in found_terms.items():
+                        st.markdown(f"**{property_name}**: {', '.join(terms)}")
+                else:
+                    st.success("✅ No excluded terms found!")
+    
+    with col3:
         if st.session_state.generated_content:
             # Export options
-            st.subheader("Export Data")
-            export_format = st.radio("Select format:", ("CSV", "Excel"))
+            export_col1, export_col2 = st.columns(2)
+            with export_col1:
+                export_format = st.radio("Format:", ("CSV", "Excel"), horizontal=True)
+            with export_col2:
+                include_seo = st.checkbox("Include SEO data", value=True)
             
             if st.download_button(
-                label=f"Download {export_format}",
-                data=export_data(st.session_state.df, export_format.lower()),
-                file_name=f"office_descriptions_{datetime.now().strftime('%Y%m%d_%H%M')}.{export_format.lower()}",
-                mime="application/octet-stream"
+                label=f"📥 Download {export_format}",
+                data=export_data(st.session_state.df, export_format.lower(), include_seo),
+                file_name=f"office_descriptions_seo_{datetime.now().strftime('%Y%m%d_%H%M')}.{export_format.lower()}",
+                mime="application/octet-stream",
+                use_container_width=True
             ):
                 st.success(f"Downloaded {export_format} file!")
-                add_debug(f"Exported data as {export_format}")
-
-# Main content area
-st.title("Centre Page Content Generator")
-
-# Show configuration status
-status_col1, status_col2, status_col3 = st.columns(3)
-with status_col1:
-    if use_mock_api:
-        st.info("🔍 TEST MODE: Using sample content generator")
-    elif st.session_state.selected_model:
-        st.info(f"Using {model_options.get(st.session_state.selected_model, st.session_state.selected_model)}")
-
-with status_col2:
-    if st.session_state.excluded_terms:
-        st.info(f"🚫 {len(st.session_state.excluded_terms)} terms excluded")
-    
-with status_col3:
-    if st.session_state.example_copies:
-        st.info(f"📄 {len(st.session_state.example_copies)} example copies loaded")
+                add_debug(f"Exported data as {export_format} with SEO: {include_seo}")
 
 # Content generation in progress
 if st.session_state.is_generating and st.session_state.df is not None:
@@ -454,6 +700,11 @@ if st.session_state.is_generating and st.session_state.df is not None:
                         )
                         st.session_state.generated_content[idx] = content
                         st.session_state.df.at[idx, 'Generated Content'] = content
+                        
+                        # Generate and store meta description
+                        meta_desc = generate_meta_description(property_data, content)
+                        st.session_state.meta_descriptions[idx] = meta_desc
+                        
                         add_debug(f"Generated {len(content) if content else 0} characters for {property_name}")
                     except Exception as e:
                         error_msg = f"Error generating content for {property_name}: {str(e)}"
@@ -466,7 +717,7 @@ if st.session_state.is_generating and st.session_state.df is not None:
             time.sleep(delay)
     
     progress_bar.progress(100)
-    status_text.text(f"Generated descriptions for {total_properties} properties!")
+    status_text.text(f"✅ Generated descriptions for {total_properties} properties!")
     st.session_state.is_generating = False
     add_debug(f"Completed batch generation of {total_properties} properties")
     st.rerun()
@@ -475,303 +726,449 @@ if st.session_state.is_generating and st.session_state.df is not None:
 if st.session_state.df is not None:
     st.subheader("Property Descriptions")
     
-    col1, col2 = st.columns([1, 2])
+    # Add tabs for different views
+    tab1, tab2, tab3 = st.tabs(["📝 Content Editor", "📊 SEO Overview", "🔧 Schema Generator"])
     
-    with col1:
-        st.subheader("Properties")
-        # Select property to display
-        for idx, row in st.session_state.df.iterrows():
-            property_name = row.get('Property Name', f'Property #{idx}')
-            if st.button(property_name, key=f"prop_{idx}"):
-                st.session_state.selected_property = idx
-                add_debug(f"Selected property: {property_name}")
-                st.rerun()
-    
-    with col2:
-        st.subheader("Generated Content")
-        if st.session_state.selected_property is not None:
-            idx = st.session_state.selected_property
+    with tab1:
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            st.subheader("Properties")
+            # Search filter
+            search_term = st.text_input("🔍 Search properties:", "")
             
-            # Display property details
-            property_data = st.session_state.df.iloc[idx].to_dict()
-            property_name = property_data.get('Property Name', 'N/A')
-            city = property_data.get('City', 'N/A')
-            zip_code = property_data.get('Zip Code', 'N/A')
-            
-            st.info(f"**Property:** {property_name}\n\n**Location:** {city}, {zip_code}")
-            
-            # Display or generate content for selected property
-            if idx in st.session_state.generated_content:
-                content = st.session_state.generated_content[idx]
-                
-                # Safety check to ensure content is a string
-                if content is not None and isinstance(content, str) and content.strip():
-                    # Clean up the content to ensure proper markdown rendering
-                    # Remove any '\n' escape sequences that might be in the text
-                    cleaned_content = content.replace('\\n', '\n')
-                    # Remove any extra backslashes before markdown characters
-                    cleaned_content = cleaned_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
-                    # Display using markdown
-                    st.markdown(cleaned_content)
-                    add_debug(f"Displayed content for {property_name} ({len(cleaned_content)} chars)")
-                else:
-                    st.error("Content appears to be empty or invalid. Please try regenerating.")
-                    add_debug(f"Empty or invalid content for {property_name}")
-                    content = ""  # Set a default empty string
-                
-                # Regenerate button
-                if st.button("Regenerate", key=f"regen_{idx}"):
-                    if not st.session_state.api_key and not use_mock_api:
-                        st.error("Please enter Anthropic API key first or enable Test Mode")
-                    else:
-                        with st.spinner("Regenerating content..."):
-                            try:
-                                add_debug(f"Regenerating content for {property_name}")
-                                new_content = generate_property_description(
-                                    property_data, 
-                                    st.session_state.api_key,
-                                    st.session_state.selected_model,
-                                    use_mock=use_mock_api
-                                )
-                                st.session_state.generated_content[idx] = new_content
-                                st.session_state.df.at[idx, 'Generated Content'] = new_content
-                                st.success("Content regenerated successfully!")
-                                add_debug(f"Regenerated content for {property_name} successfully")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error regenerating content: {str(e)}")
-                                add_debug(f"Error during regeneration: {str(e)}")
-                
-                # Use cleaned content for editing
-                if content is not None and isinstance(content, str):
-                    cleaned_content = content.replace('\\n', '\n')
-                    cleaned_content = cleaned_content.replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
-                    edited_content = st.text_area("Edit Content", value=cleaned_content, height=400)
-                else:
-                    edited_content = st.text_area("Edit Content", value="", height=400)
-                
-                if edited_content != (cleaned_content if isinstance(content, str) else ""):
-                    if st.button("Save Edits", key=f"save_{idx}"):
-                        st.session_state.generated_content[idx] = edited_content
-                        st.session_state.df.at[idx, 'Generated Content'] = edited_content
-                        st.success("Changes saved!")
-                        add_debug(f"Saved edited content for {property_name}")
+            # Filter and display properties
+            for idx, row in st.session_state.df.iterrows():
+                property_name = row.get('Property Name', f'Property #{idx}')
+                if search_term.lower() in property_name.lower() or not search_term:
+                    button_type = "primary" if idx == st.session_state.selected_property else "secondary"
+                    if st.button(property_name, key=f"prop_{idx}", type=button_type):
+                        st.session_state.selected_property = idx
+                        add_debug(f"Selected property: {property_name}")
                         st.rerun()
-                        
-            else:
-                st.info("No content generated yet. Click the button below to generate content.")
+        
+        with col2:
+            st.subheader("Generated Content")
+            if st.session_state.selected_property is not None:
+                idx = st.session_state.selected_property
                 
-                if st.button("Generate Description", key=f"gen_{idx}"):
-                    if not st.session_state.api_key and not use_mock_api:
-                        st.error("Please enter Anthropic API key first or enable Test Mode")
-                        add_debug("Generation failed - no API key and test mode disabled")
-                    else:
-                        with st.spinner("Generating content..."):
-                            try:
-                                add_debug(f"Generating content for {property_name}")
-                                content = generate_property_description(
-                                    property_data, 
-                                    st.session_state.api_key,
-                                    st.session_state.selected_model,
-                                    use_mock=use_mock_api
-                                )
-                                st.session_state.generated_content[idx] = content
-                                st.session_state.df.at[idx, 'Generated Content'] = content
-                                st.success("Content generated successfully!")
-                                add_debug(f"Generated content for {property_name} successfully")
+                # Display property details
+                property_data = st.session_state.df.iloc[idx].to_dict()
+                property_name = property_data.get('Property Name', 'N/A')
+                city = property_data.get('City', 'N/A')
+                neighborhood = property_data.get('Neighborhood', 'N/A')
+                zip_code = property_data.get('Zip Code', 'N/A')
+                
+                # Property info card
+                with st.container():
+                    st.info(f"**Property:** {property_name}\n\n**Location:** {neighborhood}, {city} {zip_code}")
+                
+                # Display or generate content for selected property
+                if idx in st.session_state.generated_content:
+                    content = st.session_state.generated_content[idx]
+                    
+                    # Safety check to ensure content is a string
+                    if content is not None and isinstance(content, str) and content.strip():
+                        # Clean up the content to ensure proper markdown rendering
+                        cleaned_content = content.replace('\\n', '\n').replace('\\#', '#').replace('\\*', '*').replace('\\-', '-')
+                        
+                        # Display content with SEO score
+                        seo_analysis = analyze_seo_quality(cleaned_content, property_data)
+                        
+                        score_col1, score_col2, score_col3 = st.columns([1, 1, 2])
+                        with score_col1:
+                            score_color = "🟢" if seo_analysis['seo_score'] >= 80 else "🟡" if seo_analysis['seo_score'] >= 60 else "🔴"
+                            st.metric("SEO Score", f"{score_color} {seo_analysis['seo_score']}%")
+                        with score_col2:
+                            wc_color = "🟢" if 150 <= seo_analysis['word_count'] <= 300 else "🟡"
+                            st.metric("Word Count", f"{wc_color} {seo_analysis['word_count']}")
+                        
+                        # Display content
+                        st.markdown("### Preview")
+                        st.markdown(cleaned_content)
+                        
+                        # SEO Analysis Expander
+                        with st.expander("📊 SEO Analysis", expanded=False):
+                            anal_col1, anal_col2 = st.columns(2)
+                            
+                            with anal_col1:
+                                st.markdown("**Content Checks:**")
+                                checks = {
+                                    "Has H1 Title": "✅" if seo_analysis['has_h1'] else "❌",
+                                    "Includes Address": "✅" if seo_analysis['has_address'] else "❌",
+                                    "Has Call-to-Action": "✅" if seo_analysis['has_cta'] else "❌",
+                                    "Readability": f"{'✅' if seo_analysis['readability_score'] == 'Good' else '⚠️'} {seo_analysis['readability_score']}",
+                                    "Location Mentions": f"{'✅' if seo_analysis['location_mentions'] >= 2 else '⚠️'} {seo_analysis['location_mentions']} times"
+                                }
+                                for check, result in checks.items():
+                                    st.text(f"{check}: {result}")
+                            
+                            with anal_col2:
+                                st.markdown("**Keyword Density:**")
+                                for keyword, data in seo_analysis['keyword_density'].items():
+                                    if data['count'] > 0 and keyword:
+                                        st.text(f"{keyword}: {data['count']}x ({data['density']})")
+                            
+                            # Meta description
+                            st.markdown("**Meta Description:**")
+                            meta_desc = st.session_state.meta_descriptions.get(idx, generate_meta_description(property_data, cleaned_content))
+                            meta_text = st.text_area("", value=meta_desc, height=80, key=f"meta_{idx}")
+                            st.caption(f"Length: {len(meta_text)}/160 characters {'✅' if len(meta_text) <= 160 else '⚠️'}")
+                            
+                            if meta_text != meta_desc:
+                                if st.button("Save Meta Description", key=f"save_meta_{idx}"):
+                                    st.session_state.meta_descriptions[idx] = meta_text
+                                    st.success("Meta description saved!")
+                        
+                        # Action buttons
+                        act_col1, act_col2 = st.columns(2)
+                        with act_col1:
+                            if st.button("🔄 Regenerate", key=f"regen_{idx}", use_container_width=True):
+                                if not st.session_state.api_key and not use_mock_api:
+                                    st.error("Please enter Anthropic API key first or enable Test Mode")
+                                else:
+                                    with st.spinner("Regenerating content..."):
+                                        try:
+                                            add_debug(f"Regenerating content for {property_name}")
+                                            new_content = generate_property_description(
+                                                property_data, 
+                                                st.session_state.api_key,
+                                                st.session_state.selected_model,
+                                                use_mock=use_mock_api
+                                            )
+                                            st.session_state.generated_content[idx] = new_content
+                                            st.session_state.df.at[idx, 'Generated Content'] = new_content
+                                            
+                                            # Regenerate meta description
+                                            meta_desc = generate_meta_description(property_data, new_content)
+                                            st.session_state.meta_descriptions[idx] = meta_desc
+                                            
+                                            st.success("Content regenerated successfully!")
+                                            add_debug(f"Regenerated content for {property_name} successfully")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error regenerating content: {str(e)}")
+                                            add_debug(f"Error during regeneration: {str(e)}")
+                        
+                        with act_col2:
+                            # Copy to clipboard functionality
+                            if st.button("📋 Copy Content", key=f"copy_{idx}", use_container_width=True):
+                                st.info("Content copied to editor below")
+                        
+                        # Edit content
+                        st.markdown("### Edit Content")
+                        edited_content = st.text_area("", value=cleaned_content, height=400, key=f"edit_{idx}")
+                        
+                        if edited_content != cleaned_content:
+                            if st.button("💾 Save Edits", key=f"save_{idx}", type="primary", use_container_width=True):
+                                st.session_state.generated_content[idx] = edited_content
+                                st.session_state.df.at[idx, 'Generated Content'] = edited_content
+                                # Update meta description
+                                meta_desc = generate_meta_description(property_data, edited_content)
+                                st.session_state.meta_descriptions[idx] = meta_desc
+                                st.success("Changes saved!")
+                                add_debug(f"Saved edited content for {property_name}")
                                 st.rerun()
-                            except Exception as e:
-                                st.error(f"Error generating content: {str(e)}")
-                                add_debug(f"Error during generation: {str(e)}")
+                    else:
+                        st.error("Content appears to be empty or invalid. Please try regenerating.")
+                        add_debug(f"Empty or invalid content for {property_name}")
+                        
+                else:
+                    st.info("No content generated yet. Click the button below to generate content.")
+                    
+                    if st.button("✨ Generate Description", key=f"gen_{idx}", type="primary", use_container_width=True):
+                        if not st.session_state.api_key and not use_mock_api:
+                            st.error("Please enter Anthropic API key first or enable Test Mode")
+                            add_debug("Generation failed - no API key and test mode disabled")
+                        else:
+                            with st.spinner("Generating content..."):
+                                try:
+                                    add_debug(f"Generating content for {property_name}")
+                                    content = generate_property_description(
+                                        property_data, 
+                                        st.session_state.api_key,
+                                        st.session_state.selected_model,
+                                        use_mock=use_mock_api
+                                    )
+                                    st.session_state.generated_content[idx] = content
+                                    st.session_state.df.at[idx, 'Generated Content'] = content
+                                    
+                                    # Generate meta description
+                                    meta_desc = generate_meta_description(property_data, content)
+                                    st.session_state.meta_descriptions[idx] = meta_desc
+                                    
+                                    st.success("Content generated successfully!")
+                                    add_debug(f"Generated content for {property_name} successfully")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error generating content: {str(e)}")
+                                    add_debug(f"Error during generation: {str(e)}")
+    
+    with tab2:
+        st.subheader("SEO Overview")
+        
+        if st.session_state.generated_content:
+            # Calculate overall statistics
+            total_generated = len(st.session_state.generated_content)
+            seo_scores = []
+            word_counts = []
+            has_cta_count = 0
+            has_address_count = 0
+            
+            for idx, content in st.session_state.generated_content.items():
+                if content and isinstance(content, str):
+                    property_data = st.session_state.df.iloc[idx].to_dict()
+                    analysis = analyze_seo_quality(content, property_data)
+                    seo_scores.append(analysis['seo_score'])
+                    word_counts.append(analysis['word_count'])
+                    if analysis['has_cta']:
+                        has_cta_count += 1
+                    if analysis['has_address']:
+                        has_address_count += 1
+            
+            # Display overview metrics
+            metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+            
+            with metric_col1:
+                avg_seo_score = sum(seo_scores) / len(seo_scores) if seo_scores else 0
+                st.metric("Average SEO Score", f"{avg_seo_score:.0f}%")
+            
+            with metric_col2:
+                avg_word_count = sum(word_counts) / len(word_counts) if word_counts else 0
+                st.metric("Average Word Count", f"{avg_word_count:.0f}")
+            
+            with metric_col3:
+                cta_percentage = (has_cta_count / total_generated * 100) if total_generated > 0 else 0
+                st.metric("Has Call-to-Action", f"{cta_percentage:.0f}%")
+            
+            with metric_col4:
+                address_percentage = (has_address_count / total_generated * 100) if total_generated > 0 else 0
+                st.metric("Includes Address", f"{address_percentage:.0f}%")
+            
+            # Detailed table
+            st.markdown("### Property SEO Scores")
+            
+            # Create summary dataframe
+            summary_data = []
+            for idx, row in st.session_state.df.iterrows():
+                if idx in st.session_state.generated_content:
+                    content = st.session_state.generated_content[idx]
+                    if content and isinstance(content, str):
+                        property_data = row.to_dict()
+                        analysis = analyze_seo_quality(content, property_data)
+                        
+                        summary_data.append({
+                            'Property': property_data.get('Property Name', f'Property #{idx}'),
+                            'City': property_data.get('City', 'N/A'),
+                            'SEO Score': f"{analysis['seo_score']}%",
+                            'Words': analysis['word_count'],
+                            'Location Mentions': analysis['location_mentions'],
+                            'Has CTA': '✅' if analysis['has_cta'] else '❌',
+                            'Has Address': '✅' if analysis['has_address'] else '❌',
+                            'Readability': analysis['readability_score']
+                        })
+            
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data)
+                st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                
+                # Download summary
+                csv = summary_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    "📥 Download SEO Summary",
+                    csv,
+                    "seo_summary.csv",
+                    "text/csv",
+                    key='download-seo-summary'
+                )
+        else:
+            st.info("Generate content first to see SEO overview")
+    
+    with tab3:
+        st.subheader("Schema.org Structured Data Generator")
+        
+        if st.session_state.selected_property is not None:
+            property_data = st.session_state.df.iloc[st.session_state.selected_property].to_dict()
+            
+            st.info(f"Generating schema for: **{property_data.get('Property Name', 'N/A')}**")
+            
+            # Generate schema
+            schema = generate_schema_markup(property_data)
+            
+            # Display schema
+            st.markdown("### Generated Schema Markup")
+            st.code(schema, language='json')
+            
+            # Copy button
+            if st.button("📋 Copy Schema", key="copy_schema"):
+                st.success("Schema copied! Paste this into your website's <head> section wrapped in <script type='application/ld+json'> tags")
+            
+            # Instructions
+            with st.expander("📚 How to Use Schema Markup"):
+                st.markdown("""
+                **What is Schema Markup?**
+                Schema markup is structured data that helps search engines understand your content better, potentially leading to rich snippets in search results.
+                
+                **How to implement:**
+                1. Copy the generated JSON-LD code above
+                2. Paste it into your webpage's HTML
+                3. Wrap it in script tags: `<script type="application/ld+json">{...}</script>`
+                4. Place it in the <head> section of your HTML
+                
+                **Benefits:**
+                - Enhanced search results with rich snippets
+                - Better local SEO performance
+                - Improved click-through rates
+                - Clear information for search engines
+                
+                **Testing:**
+                Use Google's Rich Results Test tool to validate your schema markup.
+                """)
+        else:
+            st.info("Select a property to generate schema markup")
+
 else:
-    st.info("Please upload a CSV or Excel file containing property data.")
+    # No data loaded - show instructions
+    st.info("📤 Please upload a CSV or Excel file containing property data in the sidebar")
     
     # Sample data structure
     st.subheader("Expected Data Structure")
     sample_data = {
-        "Property Name": ["SkyTower Offices", "Riverfront Executive Center"],
-        "Address": ["123 Main St", "456 Water Ave"],
+        "Property Name": ["Executive Tower", "Riverside Business Center"],
+        "Address": ["100 Wall Street", "200 River Drive"],
         "City": ["New York", "Chicago"],
-        "Zip Code": ["10001", "60611"],
-        "Neighborhood": ["Midtown", "River North"],
-        "Property Type": ["Class A High-Rise", "Boutique Office Building"],
-        "Size Range": ["5,000-50,000 sq ft", "2,000-15,000 sq ft"],
-        "Key Features": ["Floor-to-ceiling windows, 24/7 security", "Rooftop terrace, Private parking"],
-        "Nearby Businesses": ["JP Morgan, Deloitte", "Google, Boeing HQ"]
+        "Zip Code": ["10005", "60601"],
+        "Neighborhood": ["Financial District", "Loop"],
+        "Property Type": ["Class A Office", "Premium Workspace"],
+        "Size Range": ["1,000-25,000 sq ft", "500-10,000 sq ft"],
+        "Key Features": ["24/7 access, Concierge, Fitness center", "River views, Valet parking, Rooftop deck"],
+        "Building Description": ["40-story modern tower", "Boutique 10-story building"],
+        "Nearby Businesses": ["NYSE, Goldman Sachs", "Boeing, United Airlines"],
+        "Transport Access": ["Subway lines 4/5/6, PATH", "CTA Blue/Red lines"],
+        "Meeting Rooms": ["10 conference rooms", "5 meeting rooms"],
+        "Technology Features": ["Fiber internet, Smart building", "Gigabit ethernet, Video conferencing"],
+        "Business Services": ["Reception, Mail handling", "Concierge, Printing center"]
     }
-    st.dataframe(pd.DataFrame(sample_data))
+    
+    sample_df = pd.DataFrame(sample_data)
+    st.dataframe(sample_df, use_container_width=True)
     
     # Download sample template
-    sample_df = pd.DataFrame(sample_data)
     st.download_button(
-        label="Download Sample Template",
+        label="📥 Download Sample Template",
         data=export_data(sample_df, "excel"),
-        file_name="sample_property_template.xlsx",
+        file_name="property_template_seo.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 # Advanced settings
-with st.expander("Advanced Content Settings"):
-    st.subheader("Content Analysis")
-    
-    # Analyze content for excluded terms
-    if st.session_state.df is not None and 'Generated Content' in st.session_state.df.columns:
-        if st.button("Check for Excluded Terms in All Content"):
-            found_terms = {}
-            for idx, row in st.session_state.df.iterrows():
-                content = row.get('Generated Content', '')
-                if content and isinstance(content, str):
-                    property_name = row.get('Property Name', f'Property #{idx}')
-                    found_in_this_property = []
-                    
-                    for term in st.session_state.excluded_terms:
-                        if term.lower() in content.lower():
-                            found_in_this_property.append(term)
-                    
-                    if found_in_this_property:
-                        found_terms[property_name] = found_in_this_property
-            
-            if found_terms:
-                st.error("Found excluded terms in content:")
-                for property_name, terms in found_terms.items():
-                    st.markdown(f"**{property_name}**: {', '.join(terms)}")
-                add_debug(f"Found excluded terms in {len(found_terms)} properties")
-            else:
-                st.success("No excluded terms found in content!")
-                add_debug("No excluded terms found in content")
-    
-    # Batch settings
+with st.expander("⚙️ Advanced Settings"):
     st.subheader("Batch Processing Settings")
     
-    batch_size = st.slider("Batch Size", min_value=1, max_value=20, value=st.session_state.batch_size, 
-                          help="Number of properties to process at once")
-    
-    delay = st.slider("Delay Between API Calls (seconds)", min_value=0, max_value=10, value=st.session_state.api_delay, 
-                     help="Add delay between API calls to avoid rate limits")
-    
-    # Save settings to session state
-    if st.button("Save Batch Settings"):
-        st.session_state.batch_size = batch_size
-        st.session_state.api_delay = delay
-        st.success("Batch settings saved!")
-        add_debug(f"Batch settings updated: size={batch_size}, delay={delay}s")
-    
-    # Export/Import excluded terms
-    st.subheader("Export/Import Settings")
-    
     col1, col2 = st.columns(2)
+    
     with col1:
-        if st.button("Export Excluded Terms"):
-            excluded_terms_data = "\n".join(st.session_state.excluded_terms)
-            st.download_button(
-                label="Download Excluded Terms",
-                data=excluded_terms_data,
-                file_name="excluded_terms.txt",
-                mime="text/plain"
-            )
+        batch_size = st.slider("Batch Size", min_value=1, max_value=20, value=st.session_state.batch_size, 
+                              help="Number of properties to process at once")
     
     with col2:
-        terms_file = st.file_uploader("Import Excluded Terms", type=['txt'], key="terms_upload")
-        if terms_file is not None:
+        delay = st.slider("API Delay (seconds)", min_value=0, max_value=10, value=st.session_state.api_delay, 
+                         help="Delay between API calls to avoid rate limits")
+    
+    if st.button("Save Settings"):
+        st.session_state.batch_size = batch_size
+        st.session_state.api_delay = delay
+        st.success("Settings saved!")
+        add_debug(f"Updated settings: batch_size={batch_size}, delay={delay}s")
+    
+    # Export/Import settings
+    st.markdown("---")
+    st.subheader("Export/Import Settings")
+    
+    settings_col1, settings_col2 = st.columns(2)
+    
+    with settings_col1:
+        # Export all settings
+        if st.button("📤 Export All Settings"):
+            settings_data = {
+                "excluded_terms": st.session_state.excluded_terms,
+                "target_keywords": st.session_state.target_keywords,
+                "example_copies": st.session_state.example_copies,
+                "batch_size": st.session_state.batch_size,
+                "api_delay": st.session_state.api_delay
+            }
+            settings_json = json.dumps(settings_data, indent=2)
+            st.download_button(
+                label="Download Settings JSON",
+                data=settings_json,
+                file_name="content_generator_settings.json",
+                mime="application/json"
+            )
+    
+    with settings_col2:
+        # Import settings
+        settings_file = st.file_uploader("Import Settings", type=['json'])
+        if settings_file is not None:
             try:
-                content = terms_file.getvalue().decode("utf-8").strip()
-                terms = [line.strip() for line in content.split("\n") if line.strip()]
+                settings_data = json.loads(settings_file.getvalue())
                 
-                new_terms = [term for term in terms if term not in st.session_state.excluded_terms]
-                if new_terms:
-                    st.session_state.excluded_terms.extend(new_terms)
-                    st.success(f"Added {len(new_terms)} new terms from file")
-                    add_debug(f"Imported {len(new_terms)} excluded terms from file")
-                else:
-                    st.info("No new terms found in file")
+                # Update session state
+                if "excluded_terms" in settings_data:
+                    st.session_state.excluded_terms = settings_data["excluded_terms"]
+                if "target_keywords" in settings_data:
+                    st.session_state.target_keywords = settings_data["target_keywords"]
+                if "example_copies" in settings_data:
+                    st.session_state.example_copies = settings_data["example_copies"]
+                if "batch_size" in settings_data:
+                    st.session_state.batch_size = settings_data["batch_size"]
+                if "api_delay" in settings_data:
+                    st.session_state.api_delay = settings_data["api_delay"]
+                
+                st.success("Settings imported successfully!")
+                add_debug("Imported settings from file")
+                st.rerun()
             except Exception as e:
-                st.error(f"Error importing terms: {str(e)}")
+                st.error(f"Error importing settings: {str(e)}")
 
-# Debug information (expandable section)
-with st.expander("Debug Information"):
-    st.subheader("Debug Log")
-    for log in st.session_state.debug_info:
+# Debug information (hidden by default)
+with st.expander("🐛 Debug Information"):
+    debug_col1, debug_col2 = st.columns([3, 1])
+    
+    with debug_col1:
+        st.subheader("Debug Log")
+    with debug_col2:
+        if st.button("Clear Log"):
+            st.session_state.debug_info = []
+            st.rerun()
+    
+    # Display debug log
+    for log in st.session_state.debug_info[-20:]:  # Show last 20 entries
         st.text(log)
     
-    if st.button("Clear Debug Log"):
-        st.session_state.debug_info = []
-        st.rerun()
-    
-    # Display raw API response if available
-    if st.session_state.api_response:
-        st.subheader("Last API Response")
-        st.json(st.session_state.api_response)
-    
-    st.subheader("Session State")
-    # Show non-sensitive session state info
-    safe_state = {
-        "selected_property": st.session_state.selected_property,
-        "is_generating": st.session_state.is_generating,
-        "progress": st.session_state.progress,
-        "has_api_key": bool(st.session_state.api_key),
-        "selected_model": st.session_state.selected_model,
-        "excluded_terms_count": len(st.session_state.excluded_terms),
-        "example_copies_count": len(st.session_state.example_copies),
-        "content_count": len(st.session_state.generated_content),
-        "has_dataframe": st.session_state.df is not None,
-        "batch_size": st.session_state.batch_size,
-        "api_delay": st.session_state.api_delay
+    # Session state info
+    st.subheader("Session State Summary")
+    state_info = {
+        "API Key Set": bool(st.session_state.api_key),
+        "Model": st.session_state.selected_model,
+        "Properties Loaded": len(st.session_state.df) if st.session_state.df is not None else 0,
+        "Content Generated": len(st.session_state.generated_content),
+        "Excluded Terms": len(st.session_state.excluded_terms),
+        "Target Keywords": len(st.session_state.target_keywords),
+        "Example Copies": len(st.session_state.example_copies)
     }
     
-    if st.session_state.df is not None:
-        safe_state["dataframe_shape"] = st.session_state.df.shape
-        safe_state["dataframe_columns"] = list(st.session_state.df.columns)
-    
-    st.json(safe_state)
-
-# Help information
-with st.expander("Help & Usage Guide"):
-    st.markdown("""
-    ## Centre Page Content Generator - Usage Guide
-    
-    This application generates professional descriptions for office space properties using AI.
-    
-    ### Main Features
-    
-    1. **Property Data Management**
-       - Upload property data in CSV or Excel format
-       - Each property should include name, location, amenities, etc.
-    
-    2. **Content Customization**
-       - **Excluded Terms**: Add specific terms you want to avoid in the content
-       - **Example Copies**: Upload good examples to guide the AI's style and tone
-       - **Model Selection**: Choose between different Claude models based on quality/speed needs
-    
-    3. **Content Generation**
-       - Generate descriptions for all properties at once
-       - Regenerate individual descriptions as needed
-       - Edit generated content directly in the application
-    
-    4. **Export**
-       - Download all property descriptions as CSV or Excel
-       - Export your excluded terms list for future use
-    
-    ### Using Excluded Terms
-    
-    The "Terms to Avoid" feature helps maintain brand consistency and avoid specific language:
-    - Add terms or phrases you don't want to appear in the generated content
-    - The AI will actively avoid these terms during content creation
-    - Use the content analysis tool to check if any excluded terms appear in the output
-    
-    ### Using Example Copies
-    
-    The example copies feature helps the AI match your preferred style:
-    - Upload or paste examples of well-written property descriptions
-    - The AI will emulate the tone, structure, and style of these examples
-    - More examples = better understanding of your preferred style
-    
-    ### Advanced Settings
-    
-    - **Batch Processing**: Control how many properties are processed at once
-    - **API Delays**: Add time between API calls to avoid rate limits
-    - **Content Analysis**: Check if generated content contains excluded terms
-    """)
+    for key, value in state_info.items():
+        st.text(f"{key}: {value}")
 
 # Footer
 st.markdown("---")
-st.caption("Centre Page Content Generator | Developed by MediaVision & Metis")
+footer_col1, footer_col2, footer_col3 = st.columns([2, 2, 1])
+
+with footer_col1:
+    st.caption("🏢 Centre Page Content Generator v2.0 - SEO Enhanced")
+
+with footer_col2:
+    st.caption("Developed by MediaVision & Metis")
+
+with footer_col3:
+    st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d')}")
