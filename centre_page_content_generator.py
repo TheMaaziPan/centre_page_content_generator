@@ -1,4 +1,49 @@
-import streamlit as st
+# Advanced settings
+with st.expander("⚙️ Advanced Settings"):
+    st.subheader("Batch Processing Settings")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        batch_size = st.slider("Batch Size", min_value=1, max_value=20, value=st.session_state.batch_size, 
+                              help="Number of properties to process at once")
+    
+    with col2:
+        delay = st.slider("API Delay (seconds)", min_value=0, max_value=10, value=st.session_state.api_delay, 
+                         help="Delay between API calls to avoid rate limits")
+    
+    if st.button("Save Settings"):
+        st.session_state.batch_size = batch_size
+        st.session_state.api_delay = delay
+        st.success("Settings saved!")
+        add_debug(f"Updated settings: batch_size={batch_size}, delay={delay}s")
+    
+    # Scraped Data Editor
+    if st.session_state.scraped_properties:
+        st.markdown("---")
+        st.subheader("✏️ Edit Scraped Data")
+        
+        # Select property to edit
+        property_names = [p.get('Property Name', f'Property {i+1}') for i, p in enumerate(st.session_state.scraped_properties)]
+        selected_prop_idx = st.selectbox("Select property to edit:", range(len(property_names)), format_func=lambda x: property_names[x])
+        
+        if selected_prop_idx is not None:
+            prop = st.session_state.scraped_properties[selected_prop_idx]
+            
+            # Create editable fields
+            st.markdown("#### Basic Information")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                prop['Property Name'] = st.text_input("Property Name", value=prop.get('Property Name', ''), key=f"edit_name_{selected_prop_idx}")
+                prop['Address'] = st.text_input("Address", value=prop.get('Address', ''), key=f"edit_addr_{selected_prop_idx}")
+                prop['City'] = st.text_input("City", value=prop.get('City', ''), key=f"edit_city_{selected_prop_idx}")
+                prop['State'] = st.text_input("State", value=prop.get('State', ''), key=f"edit_state_{selected_prop_idx}")
+            
+            with col2:
+                prop['Zip Code'] = st.text_input("Zip Code", value=prop.get('Zip Code', ''), key=f"edit_zip_{selected_prop_idx}")
+                prop['Neighborhood'] = st.text_input("Neighborhood", value=prop.get('Neighborhood', ''), key=f"edit_neighborhood_{selected_prop_idx}")
+                prop['Property Type'] = st.text_input("Property Type", value=prop.get('Property Type', 'Office Space'), key=f"edit_import streamlit as st
 import pandas as pd
 import numpy as np
 import os
@@ -7,6 +52,9 @@ import json
 import requests
 from io import BytesIO
 from datetime import datetime
+from bs4 import BeautifulSoup
+import re
+from urllib.parse import urlparse
 
 # Set page config
 st.set_page_config(
@@ -44,8 +92,10 @@ if 'api_delay' not in st.session_state:
     st.session_state.api_delay = 1
 if 'target_keywords' not in st.session_state:
     st.session_state.target_keywords = ['office space', 'executive office', 'workspace']
-if 'meta_descriptions' not in st.session_state:
-    st.session_state.meta_descriptions = {}
+if 'scraped_properties' not in st.session_state:
+    st.session_state.scraped_properties = []
+if 'scraping_in_progress' not in st.session_state:
+    st.session_state.scraping_in_progress = False
 
 # Function to add debug information
 def add_debug(message):
@@ -546,29 +596,162 @@ with st.sidebar:
     
     # File uploader
     st.subheader("📊 Property Data")
-    uploaded_file = st.file_uploader("Upload Property Data", type=['csv', 'xlsx'])
     
-    if uploaded_file is not None:
-        try:
-            if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
-                add_debug(f"Loaded CSV file: {uploaded_file.name}")
-            else:
-                df = pd.read_excel(uploaded_file)
-                add_debug(f"Loaded Excel file: {uploaded_file.name}")
+    # Add tabs for different input methods
+    data_tab1, data_tab2 = st.tabs(["Upload File", "Scrape from URL"])
+    
+    with data_tab1:
+        uploaded_file = st.file_uploader("Upload Property Data", type=['csv', 'xlsx'])
+        
+        if uploaded_file is not None:
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    df = pd.read_csv(uploaded_file)
+                    add_debug(f"Loaded CSV file: {uploaded_file.name}")
+                else:
+                    df = pd.read_excel(uploaded_file)
+                    add_debug(f"Loaded Excel file: {uploaded_file.name}")
+                    
+                st.session_state.df = df
+                st.success(f"Loaded {len(df)} properties")
                 
-            st.session_state.df = df
-            st.success(f"Loaded {len(df)} properties")
+                # Display data fields for verification
+                if st.checkbox("Show data fields"):
+                    st.write("Detected columns:")
+                    columns = df.columns.tolist()
+                    st.write(", ".join(columns))
+                    add_debug(f"Detected {len(columns)} columns: {', '.join(columns[:5])}...")
+            except Exception as e:
+                st.error(f"Error loading file: {str(e)}")
+                add_debug(f"Error loading file: {str(e)}")
+    
+    with data_tab2:
+        st.markdown("### 🔗 Scrape Property Data")
+        st.caption("Extract property information from website URLs")
+        
+        # URL input
+        url_input = st.text_input("Enter property URL:", placeholder="https://example.com/property-page")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔍 Scrape URL", use_container_width=True):
+                if url_input:
+                    with st.spinner("Scraping property data..."):
+                        property_data = scrape_property_data(url_input)
+                        if property_data:
+                            st.session_state.scraped_properties.append(property_data)
+                            st.success("✅ Property data extracted!")
+                            add_debug(f"Added scraped property: {property_data.get('Property Name', 'Unknown')}")
+                        else:
+                            st.error("Failed to extract data. Please check the URL.")
+                else:
+                    st.warning("Please enter a URL")
+        
+        with col2:
+            if st.button("🗑️ Clear Scraped", use_container_width=True):
+                st.session_state.scraped_properties = []
+                st.success("Cleared scraped properties")
+                st.rerun()
+        
+        # Bulk URL input
+        with st.expander("📋 Bulk URL Import"):
+            urls_text = st.text_area(
+                "Paste multiple URLs (one per line):",
+                height=150,
+                placeholder="https://example.com/property1\nhttps://example.com/property2\nhttps://example.com/property3"
+            )
             
-            # Display data fields for verification
-            if st.checkbox("Show data fields"):
-                st.write("Detected columns:")
-                columns = df.columns.tolist()
-                st.write(", ".join(columns))
-                add_debug(f"Detected {len(columns)} columns: {', '.join(columns[:5])}...")
-        except Exception as e:
-            st.error(f"Error loading file: {str(e)}")
-            add_debug(f"Error loading file: {str(e)}")
+            if st.button("🔍 Scrape All URLs"):
+                if urls_text:
+                    urls = [url.strip() for url in urls_text.split('\n') if url.strip()]
+                    if urls:
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        for i, url in enumerate(urls):
+                            status_text.text(f"Scraping {i+1}/{len(urls)}: {url[:50]}...")
+                            progress_bar.progress((i + 1) / len(urls))
+                            
+                            property_data = scrape_property_data(url)
+                            if property_data:
+                                st.session_state.scraped_properties.append(property_data)
+                                add_debug(f"Scraped: {property_data.get('Property Name', 'Unknown')}")
+                            
+                            # Small delay to avoid overwhelming servers
+                            time.sleep(1)
+                        
+                        status_text.text(f"✅ Scraped {len(st.session_state.scraped_properties)} properties")
+                        st.success(f"Completed scraping {len(urls)} URLs")
+                else:
+                    st.warning("Please enter at least one URL")
+        
+        # Display scraped properties
+        if st.session_state.scraped_properties:
+            st.markdown(f"### Scraped Properties ({len(st.session_state.scraped_properties)})")
+            
+            # Show summary of scraped data
+            for i, prop in enumerate(st.session_state.scraped_properties):
+                with st.expander(f"{prop.get('Property Name', f'Property {i+1}')} - {prop.get('City', 'Unknown')}"):
+                    # Display key fields
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.text(f"Address: {prop.get('Address', 'N/A')}")
+                        st.text(f"City: {prop.get('City', 'N/A')}")
+                        st.text(f"Zip: {prop.get('Zip Code', 'N/A')}")
+                    with col2:
+                        st.text(f"Features: {len(prop.get('Key Features', '').split(',')) if prop.get('Key Features') else 0} items")
+                        st.text(f"Source: {prop.get('Source URL', 'N/A')[:30]}...")
+                    
+                    # Option to remove
+                    if st.button(f"Remove", key=f"remove_scraped_{i}"):
+                        st.session_state.scraped_properties.pop(i)
+                        st.rerun()
+            
+            # Convert to DataFrame
+            if st.button("📊 Use Scraped Data", type="primary", use_container_width=True):
+                df = create_dataframe_from_scraped_data(st.session_state.scraped_properties)
+                if df is not None:
+                    st.session_state.df = df
+                    st.success(f"Created dataset with {len(df)} properties")
+                    add_debug(f"Converted {len(df)} scraped properties to DataFrame")
+                    st.rerun()
+                else:
+                    st.error("No data to convert")
+        
+        # Tips for scraping
+        with st.expander("💡 Scraping Tips"):
+            st.markdown("""
+            **Best practices for URL scraping:**
+            - Use property detail pages, not listing pages
+            - Ensure URLs are publicly accessible
+            - Some sites may block automated access
+            - Data extraction quality varies by site structure
+            
+            **What we look for:**
+            - Property name and address
+            - Location details (city, state, zip)
+            - Features and amenities lists
+            - Building descriptions
+            - Contact information
+            - Transportation access
+            
+            **Note:** Scraped data may need manual review and editing.
+            """)
+    
+    # Show current data status
+    if st.session_state.df is not None:
+        st.markdown("---")
+        st.success(f"✅ {len(st.session_state.df)} properties loaded")
+        
+        # Option to append scraped data to existing
+        if st.session_state.scraped_properties:
+            if st.button("➕ Add Scraped to Existing Data"):
+                new_df = create_dataframe_from_scraped_data(st.session_state.scraped_properties)
+                if new_df is not None:
+                    st.session_state.df = pd.concat([st.session_state.df, new_df], ignore_index=True)
+                    st.session_state.scraped_properties = []
+                    st.success(f"Added {len(new_df)} properties to existing data")
+                    st.rerun()
 
 # Main content area
 st.title("🏢 Centre Page Content Generator - SEO Enhanced")
@@ -1029,7 +1212,32 @@ if st.session_state.df is not None:
 
 else:
     # No data loaded - show instructions
-    st.info("📤 Please upload a CSV or Excel file containing property data in the sidebar")
+    st.info("📤 Please upload a CSV/Excel file or scrape property data from URLs in the sidebar")
+    
+    # Show quick start for URL scraping
+    st.subheader("🚀 Quick Start: URL Scraping")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        ### How to use URL scraping:
+        1. **Single URL**: Enter a property page URL and click "Scrape URL"
+        2. **Multiple URLs**: Use bulk import for multiple properties
+        3. **Review**: Check extracted data in the sidebar
+        4. **Use Data**: Click "Use Scraped Data" to start generating content
+        """)
+    
+    with col2:
+        st.markdown("""
+        ### Supported property data:
+        - Property name and address
+        - Location (city, state, zip)
+        - Features and amenities
+        - Building descriptions
+        - Contact information
+        - Transportation details
+        """)
     
     # Sample data structure
     st.subheader("Expected Data Structure")
@@ -1047,7 +1255,8 @@ else:
         "Transport Access": ["Subway lines 4/5/6, PATH", "CTA Blue/Red lines"],
         "Meeting Rooms": ["10 conference rooms", "5 meeting rooms"],
         "Technology Features": ["Fiber internet, Smart building", "Gigabit ethernet, Video conferencing"],
-        "Business Services": ["Reception, Mail handling", "Concierge, Printing center"]
+        "Business Services": ["Reception, Mail handling", "Concierge, Printing center"],
+        "Source URL": ["https://example.com/property1", "https://example.com/property2"]
     }
     
     sample_df = pd.DataFrame(sample_data)
