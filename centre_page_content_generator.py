@@ -7,6 +7,9 @@ import json
 import requests
 from io import BytesIO
 from datetime import datetime
+from bs4 import BeautifulSoup
+import re
+from urllib.parse import urlparse
 
 # Set page config
 st.set_page_config(
@@ -46,6 +49,10 @@ if 'target_keywords' not in st.session_state:
     st.session_state.target_keywords = ['office space', 'executive office', 'workspace']
 if 'meta_descriptions' not in st.session_state:
     st.session_state.meta_descriptions = {}
+if 'scraped_properties' not in st.session_state:
+    st.session_state.scraped_properties = []
+if 'scraping_in_progress' not in st.session_state:
+    st.session_state.scraping_in_progress = False
 
 # Function to add debug information
 def add_debug(message):
@@ -53,6 +60,253 @@ def add_debug(message):
     st.session_state.debug_info.append(f"[{timestamp}] {message}")
     if len(st.session_state.debug_info) > 20:  # Keep only the last 20 messages
         st.session_state.debug_info = st.session_state.debug_info[-20:]
+
+# Web Scraping Functions
+def extract_text_from_element(element):
+    """Extract and clean text from BeautifulSoup element"""
+    if element:
+        text = element.get_text(strip=True)
+        # Clean up extra whitespace
+        text = ' '.join(text.split())
+        return text
+    return ""
+
+def find_address_info(soup, text_content):
+    """Extract address information from page"""
+    address_data = {
+        'Address': '',
+        'City': '',
+        'State': '',
+        'Zip Code': ''
+    }
+    
+    # Common address patterns
+    address_pattern = r'(\d+[\w\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Place|Pl|Court|Ct))'
+    zip_pattern = r'\b(\d{5}(?:-\d{4})?)\b'
+    
+    # Look for address in common locations
+    # 1. Check meta tags
+    meta_address = soup.find('meta', {'name': re.compile('address|location', re.I)})
+    if meta_address and meta_address.get('content'):
+        address_data['Address'] = meta_address['content']
+    
+    # 2. Check structured data
+    scripts = soup.find_all('script', type='application/ld+json')
+    for script in scripts:
+        try:
+            data = json.loads(script.string)
+            if isinstance(data, dict):
+                if 'address' in data:
+                    addr = data['address']
+                    if isinstance(addr, dict):
+                        address_data['Address'] = addr.get('streetAddress', '')
+                        address_data['City'] = addr.get('addressLocality', '')
+                        address_data['State'] = addr.get('addressRegion', '')
+                        address_data['Zip Code'] = addr.get('postalCode', '')
+        except:
+            pass
+    
+    # 3. Search in text content
+    if not address_data['Address']:
+        address_matches = re.findall(address_pattern, text_content)
+        if address_matches:
+            address_data['Address'] = address_matches[0]
+    
+    # Find zip code
+    if not address_data['Zip Code']:
+        zip_matches = re.findall(zip_pattern, text_content)
+        if zip_matches:
+            address_data['Zip Code'] = zip_matches[0]
+    
+    return address_data
+
+def extract_property_features(soup, text_content):
+    """Extract property features and amenities"""
+    features = {
+        'Key Features': [],
+        'Technology Features': [],
+        'Security Features': [],
+        'Wellness Amenities': [],
+        'Business Services': [],
+        'Meeting Rooms': '',
+        'Common Areas': ''
+    }
+    
+    # Keywords to look for
+    tech_keywords = ['wifi', 'internet', 'fiber', 'technology', 'av', 'video conferencing', 'digital']
+    security_keywords = ['security', 'secure', 'surveillance', 'access control', 'monitored', '24/7']
+    wellness_keywords = ['fitness', 'gym', 'wellness', 'health', 'shower', 'bike', 'outdoor']
+    business_keywords = ['reception', 'concierge', 'mail', 'print', 'copy', 'admin', 'support']
+    meeting_keywords = ['meeting', 'conference', 'boardroom', 'training room']
+    
+    # Look for features in lists
+    feature_lists = soup.find_all(['ul', 'ol'])
+    for lst in feature_lists:
+        items = lst.find_all('li')
+        for item in items:
+            item_text = extract_text_from_element(item).lower()
+            
+            # Categorize features
+            if any(keyword in item_text for keyword in tech_keywords):
+                features['Technology Features'].append(extract_text_from_element(item))
+            elif any(keyword in item_text for keyword in security_keywords):
+                features['Security Features'].append(extract_text_from_element(item))
+            elif any(keyword in item_text for keyword in wellness_keywords):
+                features['Wellness Amenities'].append(extract_text_from_element(item))
+            elif any(keyword in item_text for keyword in business_keywords):
+                features['Business Services'].append(extract_text_from_element(item))
+            elif any(keyword in item_text for keyword in meeting_keywords):
+                if not features['Meeting Rooms']:
+                    features['Meeting Rooms'] = extract_text_from_element(item)
+            else:
+                features['Key Features'].append(extract_text_from_element(item))
+    
+    # Convert lists to comma-separated strings
+    for key in ['Key Features', 'Technology Features', 'Security Features', 'Wellness Amenities', 'Business Services']:
+        if features[key]:
+            features[key] = ', '.join(features[key][:5])  # Limit to 5 items
+        else:
+            features[key] = ''
+    
+    return features
+
+def scrape_property_data(url):
+    """Scrape property data from a given URL"""
+    try:
+        add_debug(f"Starting to scrape: {url}")
+        
+        # Send request with headers to avoid blocking
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Parse HTML
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Get page text content
+        text_content = soup.get_text()
+        
+        # Initialize property data
+        property_data = {
+            'Property Name': '',
+            'Address': '',
+            'City': '',
+            'State': '',
+            'Zip Code': '',
+            'Neighborhood': '',
+            'Property Type': 'Office Space',
+            'Size Range': '',
+            'Building Description': '',
+            'Key Features': '',
+            'Nearby Businesses': '',
+            'Transport Access': '',
+            'Technology Features': '',
+            'Meeting Rooms': '',
+            'Common Areas': '',
+            'Business Services': '',
+            'Security Features': '',
+            'Wellness Amenities': '',
+            'Office Configurations': '',
+            'Lease Options': '',
+            'Contact Information': '',
+            'Source URL': url
+        }
+        
+        # Extract property name
+        title = soup.find('title')
+        if title:
+            property_data['Property Name'] = extract_text_from_element(title).split('|')[0].strip()
+        
+        # Try H1 if title not good
+        if not property_data['Property Name'] or len(property_data['Property Name']) < 5:
+            h1 = soup.find('h1')
+            if h1:
+                property_data['Property Name'] = extract_text_from_element(h1)
+        
+        # Extract address information
+        address_info = find_address_info(soup, text_content)
+        property_data.update(address_info)
+        
+        # Extract features
+        features = extract_property_features(soup, text_content)
+        property_data.update(features)
+        
+        # Look for neighborhood info
+        neighborhood_patterns = [
+            r'located in (?:the )?([A-Z][a-z\s]+)(?:neighborhood|district|area)',
+            r'([A-Z][a-z\s]+) neighborhood',
+            r'([A-Z][a-z\s]+) district'
+        ]
+        
+        for pattern in neighborhood_patterns:
+            matches = re.findall(pattern, text_content)
+            if matches:
+                property_data['Neighborhood'] = matches[0].strip()
+                break
+        
+        # Look for size/square footage
+        size_pattern = r'(\d{1,3},?\d{3}[\s-]+(?:to|-)[\s-]+\d{1,3},?\d{3}\s*(?:sq\.?\s*ft\.?|square feet))'
+        size_matches = re.findall(size_pattern, text_content, re.I)
+        if size_matches:
+            property_data['Size Range'] = size_matches[0]
+        
+        # Look for transport/transit information
+        transit_keywords = ['subway', 'metro', 'train', 'bus', 'transit', 'transportation']
+        transit_sentences = []
+        sentences = text_content.split('.')
+        for sentence in sentences:
+            if any(keyword in sentence.lower() for keyword in transit_keywords):
+                transit_sentences.append(sentence.strip())
+        
+        if transit_sentences:
+            property_data['Transport Access'] = '. '.join(transit_sentences[:2])
+        
+        # Extract building description from meta description or first paragraph
+        meta_desc = soup.find('meta', {'name': 'description'})
+        if meta_desc and meta_desc.get('content'):
+            property_data['Building Description'] = meta_desc['content']
+        else:
+            # Try to get first paragraph
+            first_p = soup.find('p')
+            if first_p:
+                property_data['Building Description'] = extract_text_from_element(first_p)[:200]
+        
+        # Look for contact information
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        phone_pattern = r'(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})'
+        
+        emails = re.findall(email_pattern, text_content)
+        phones = re.findall(phone_pattern, text_content)
+        
+        contact_info = []
+        if emails:
+            contact_info.append(f"Email: {emails[0]}")
+        if phones:
+            phone = phones[0]
+            formatted_phone = f"({phone[0]}) {phone[1]}-{phone[2]}"
+            contact_info.append(f"Phone: {formatted_phone}")
+        
+        property_data['Contact Information'] = ', '.join(contact_info)
+        
+        add_debug(f"Successfully scraped data from {url}")
+        return property_data
+        
+    except requests.RequestException as e:
+        add_debug(f"Error fetching URL: {str(e)}")
+        return None
+    except Exception as e:
+        add_debug(f"Error parsing content: {str(e)}")
+        return None
+
+def create_dataframe_from_scraped_data(scraped_properties):
+    """Create a DataFrame from scraped property data"""
+    if not scraped_properties:
+        return None
+    
+    df = pd.DataFrame(scraped_properties)
+    return df
 
 # SEO Analysis Functions
 def analyze_seo_quality(content, property_data):
@@ -546,29 +800,162 @@ with st.sidebar:
     
     # File uploader
     st.subheader("📊 Property Data")
-    uploaded_file = st.file_uploader("Upload Property Data", type=['csv', 'xlsx'])
     
-    if uploaded_file is not None:
-        try:
-            if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
-                add_debug(f"Loaded CSV file: {uploaded_file.name}")
-            else:
-                df = pd.read_excel(uploaded_file)
-                add_debug(f"Loaded Excel file: {uploaded_file.name}")
+    # Add tabs for different input methods
+    data_tab1, data_tab2 = st.tabs(["Upload File", "Scrape from URL"])
+    
+    with data_tab1:
+        uploaded_file = st.file_uploader("Upload Property Data", type=['csv', 'xlsx'])
+        
+        if uploaded_file is not None:
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    df = pd.read_csv(uploaded_file)
+                    add_debug(f"Loaded CSV file: {uploaded_file.name}")
+                else:
+                    df = pd.read_excel(uploaded_file)
+                    add_debug(f"Loaded Excel file: {uploaded_file.name}")
+                    
+                st.session_state.df = df
+                st.success(f"Loaded {len(df)} properties")
                 
-            st.session_state.df = df
-            st.success(f"Loaded {len(df)} properties")
+                # Display data fields for verification
+                if st.checkbox("Show data fields"):
+                    st.write("Detected columns:")
+                    columns = df.columns.tolist()
+                    st.write(", ".join(columns))
+                    add_debug(f"Detected {len(columns)} columns: {', '.join(columns[:5])}...")
+            except Exception as e:
+                st.error(f"Error loading file: {str(e)}")
+                add_debug(f"Error loading file: {str(e)}")
+    
+    with data_tab2:
+        st.markdown("### 🔗 Scrape Property Data")
+        st.caption("Extract property information from website URLs")
+        
+        # URL input
+        url_input = st.text_input("Enter property URL:", placeholder="https://example.com/property-page")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔍 Scrape URL", use_container_width=True):
+                if url_input:
+                    with st.spinner("Scraping property data..."):
+                        property_data = scrape_property_data(url_input)
+                        if property_data:
+                            st.session_state.scraped_properties.append(property_data)
+                            st.success("✅ Property data extracted!")
+                            add_debug(f"Added scraped property: {property_data.get('Property Name', 'Unknown')}")
+                        else:
+                            st.error("Failed to extract data. Please check the URL.")
+                else:
+                    st.warning("Please enter a URL")
+        
+        with col2:
+            if st.button("🗑️ Clear Scraped", use_container_width=True):
+                st.session_state.scraped_properties = []
+                st.success("Cleared scraped properties")
+                st.rerun()
+        
+        # Bulk URL input
+        with st.expander("📋 Bulk URL Import"):
+            urls_text = st.text_area(
+                "Paste multiple URLs (one per line):",
+                height=150,
+                placeholder="https://example.com/property1\nhttps://example.com/property2\nhttps://example.com/property3"
+            )
             
-            # Display data fields for verification
-            if st.checkbox("Show data fields"):
-                st.write("Detected columns:")
-                columns = df.columns.tolist()
-                st.write(", ".join(columns))
-                add_debug(f"Detected {len(columns)} columns: {', '.join(columns[:5])}...")
-        except Exception as e:
-            st.error(f"Error loading file: {str(e)}")
-            add_debug(f"Error loading file: {str(e)}")
+            if st.button("🔍 Scrape All URLs"):
+                if urls_text:
+                    urls = [url.strip() for url in urls_text.split('\n') if url.strip()]
+                    if urls:
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        for i, url in enumerate(urls):
+                            status_text.text(f"Scraping {i+1}/{len(urls)}: {url[:50]}...")
+                            progress_bar.progress((i + 1) / len(urls))
+                            
+                            property_data = scrape_property_data(url)
+                            if property_data:
+                                st.session_state.scraped_properties.append(property_data)
+                                add_debug(f"Scraped: {property_data.get('Property Name', 'Unknown')}")
+                            
+                            # Small delay to avoid overwhelming servers
+                            time.sleep(1)
+                        
+                        status_text.text(f"✅ Scraped {len(st.session_state.scraped_properties)} properties")
+                        st.success(f"Completed scraping {len(urls)} URLs")
+                else:
+                    st.warning("Please enter at least one URL")
+        
+        # Display scraped properties
+        if st.session_state.scraped_properties:
+            st.markdown(f"### Scraped Properties ({len(st.session_state.scraped_properties)})")
+            
+            # Show summary of scraped data
+            for i, prop in enumerate(st.session_state.scraped_properties):
+                with st.expander(f"{prop.get('Property Name', f'Property {i+1}')} - {prop.get('City', 'Unknown')}"):
+                    # Display key fields
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.text(f"Address: {prop.get('Address', 'N/A')}")
+                        st.text(f"City: {prop.get('City', 'N/A')}")
+                        st.text(f"Zip: {prop.get('Zip Code', 'N/A')}")
+                    with col2:
+                        st.text(f"Features: {len(prop.get('Key Features', '').split(',')) if prop.get('Key Features') else 0} items")
+                        st.text(f"Source: {prop.get('Source URL', 'N/A')[:30]}...")
+                    
+                    # Option to remove
+                    if st.button(f"Remove", key=f"remove_scraped_{i}"):
+                        st.session_state.scraped_properties.pop(i)
+                        st.rerun()
+            
+            # Convert to DataFrame
+            if st.button("📊 Use Scraped Data", type="primary", use_container_width=True):
+                df = create_dataframe_from_scraped_data(st.session_state.scraped_properties)
+                if df is not None:
+                    st.session_state.df = df
+                    st.success(f"Created dataset with {len(df)} properties")
+                    add_debug(f"Converted {len(df)} scraped properties to DataFrame")
+                    st.rerun()
+                else:
+                    st.error("No data to convert")
+        
+        # Tips for scraping
+        with st.expander("💡 Scraping Tips"):
+            st.markdown("""
+            **Best practices for URL scraping:**
+            - Use property detail pages, not listing pages
+            - Ensure URLs are publicly accessible
+            - Some sites may block automated access
+            - Data extraction quality varies by site structure
+            
+            **What we look for:**
+            - Property name and address
+            - Location details (city, state, zip)
+            - Features and amenities lists
+            - Building descriptions
+            - Contact information
+            - Transportation access
+            
+            **Note:** Scraped data may need manual review and editing.
+            """)
+    
+    # Show current data status
+    if st.session_state.df is not None:
+        st.markdown("---")
+        st.success(f"✅ {len(st.session_state.df)} properties loaded")
+        
+        # Option to append scraped data to existing
+        if st.session_state.scraped_properties:
+            if st.button("➕ Add Scraped to Existing Data"):
+                new_df = create_dataframe_from_scraped_data(st.session_state.scraped_properties)
+                if new_df is not None:
+                    st.session_state.df = pd.concat([st.session_state.df, new_df], ignore_index=True)
+                    st.session_state.scraped_properties = []
+                    st.success(f"Added {len(new_df)} properties to existing data")
+                    st.rerun()
 
 # Main content area
 st.title("🏢 Centre Page Content Generator - SEO Enhanced")
@@ -1029,7 +1416,32 @@ if st.session_state.df is not None:
 
 else:
     # No data loaded - show instructions
-    st.info("📤 Please upload a CSV or Excel file containing property data in the sidebar")
+    st.info("📤 Please upload a CSV/Excel file or scrape property data from URLs in the sidebar")
+    
+    # Show quick start for URL scraping
+    st.subheader("🚀 Quick Start: URL Scraping")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        ### How to use URL scraping:
+        1. **Single URL**: Enter a property page URL and click "Scrape URL"
+        2. **Multiple URLs**: Use bulk import for multiple properties
+        3. **Review**: Check extracted data in the sidebar
+        4. **Use Data**: Click "Use Scraped Data" to start generating content
+        """)
+    
+    with col2:
+        st.markdown("""
+        ### Supported property data:
+        - Property name and address
+        - Location (city, state, zip)
+        - Features and amenities
+        - Building descriptions
+        - Contact information
+        - Transportation details
+        """)
     
     # Sample data structure
     st.subheader("Expected Data Structure")
@@ -1047,7 +1459,8 @@ else:
         "Transport Access": ["Subway lines 4/5/6, PATH", "CTA Blue/Red lines"],
         "Meeting Rooms": ["10 conference rooms", "5 meeting rooms"],
         "Technology Features": ["Fiber internet, Smart building", "Gigabit ethernet, Video conferencing"],
-        "Business Services": ["Reception, Mail handling", "Concierge, Printing center"]
+        "Business Services": ["Reception, Mail handling", "Concierge, Printing center"],
+        "Source URL": ["https://example.com/property1", "https://example.com/property2"]
     }
     
     sample_df = pd.DataFrame(sample_data)
@@ -1080,6 +1493,63 @@ with st.expander("⚙️ Advanced Settings"):
         st.session_state.api_delay = delay
         st.success("Settings saved!")
         add_debug(f"Updated settings: batch_size={batch_size}, delay={delay}s")
+    
+    # Scraped Data Editor
+    if st.session_state.scraped_properties:
+        st.markdown("---")
+        st.subheader("✏️ Edit Scraped Data")
+        
+        # Select property to edit
+        property_names = [p.get('Property Name', f'Property {i+1}') for i, p in enumerate(st.session_state.scraped_properties)]
+        selected_prop_idx = st.selectbox("Select property to edit:", range(len(property_names)), format_func=lambda x: property_names[x])
+        
+        if selected_prop_idx is not None:
+            prop = st.session_state.scraped_properties[selected_prop_idx]
+            
+            # Create editable fields
+            st.markdown("#### Basic Information")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                prop['Property Name'] = st.text_input("Property Name", value=prop.get('Property Name', ''), key=f"edit_name_{selected_prop_idx}")
+                prop['Address'] = st.text_input("Address", value=prop.get('Address', ''), key=f"edit_addr_{selected_prop_idx}")
+                prop['City'] = st.text_input("City", value=prop.get('City', ''), key=f"edit_city_{selected_prop_idx}")
+                prop['State'] = st.text_input("State", value=prop.get('State', ''), key=f"edit_state_{selected_prop_idx}")
+            
+            with col2:
+                prop['Zip Code'] = st.text_input("Zip Code", value=prop.get('Zip Code', ''), key=f"edit_zip_{selected_prop_idx}")
+                prop['Neighborhood'] = st.text_input("Neighborhood", value=prop.get('Neighborhood', ''), key=f"edit_neighborhood_{selected_prop_idx}")
+                prop['Property Type'] = st.text_input("Property Type", value=prop.get('Property Type', 'Office Space'), key=f"edit_type_{selected_prop_idx}")
+                prop['Size Range'] = st.text_input("Size Range", value=prop.get('Size Range', ''), key=f"edit_size_{selected_prop_idx}")
+            
+            st.markdown("#### Features & Amenities")
+            prop['Key Features'] = st.text_area("Key Features", value=prop.get('Key Features', ''), height=80, key=f"edit_features_{selected_prop_idx}")
+            prop['Building Description'] = st.text_area("Building Description", value=prop.get('Building Description', ''), height=100, key=f"edit_desc_{selected_prop_idx}")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                prop['Technology Features'] = st.text_area("Technology Features", value=prop.get('Technology Features', ''), height=80, key=f"edit_tech_{selected_prop_idx}")
+                prop['Security Features'] = st.text_area("Security Features", value=prop.get('Security Features', ''), height=80, key=f"edit_security_{selected_prop_idx}")
+            
+            with col2:
+                prop['Business Services'] = st.text_area("Business Services", value=prop.get('Business Services', ''), height=80, key=f"edit_business_{selected_prop_idx}")
+                prop['Wellness Amenities'] = st.text_area("Wellness Amenities", value=prop.get('Wellness Amenities', ''), height=80, key=f"edit_wellness_{selected_prop_idx}")
+            
+            st.markdown("#### Additional Details")
+            col1, col2 = st.columns(2)
+            with col1:
+                prop['Transport Access'] = st.text_area("Transport Access", value=prop.get('Transport Access', ''), height=80, key=f"edit_transport_{selected_prop_idx}")
+                prop['Meeting Rooms'] = st.text_input("Meeting Rooms", value=prop.get('Meeting Rooms', ''), key=f"edit_meeting_{selected_prop_idx}")
+            
+            with col2:
+                prop['Nearby Businesses'] = st.text_area("Nearby Businesses", value=prop.get('Nearby Businesses', ''), height=80, key=f"edit_nearby_{selected_prop_idx}")
+                prop['Contact Information'] = st.text_input("Contact Information", value=prop.get('Contact Information', ''), key=f"edit_contact_{selected_prop_idx}")
+            
+            # Save changes button
+            if st.button("💾 Save Changes", key=f"save_edit_{selected_prop_idx}"):
+                st.session_state.scraped_properties[selected_prop_idx] = prop
+                st.success("Changes saved!")
+                add_debug(f"Updated scraped property: {prop.get('Property Name', 'Unknown')}")
     
     # Export/Import settings
     st.markdown("---")
@@ -1154,7 +1624,8 @@ with st.expander("🐛 Debug Information"):
         "Content Generated": len(st.session_state.generated_content),
         "Excluded Terms": len(st.session_state.excluded_terms),
         "Target Keywords": len(st.session_state.target_keywords),
-        "Example Copies": len(st.session_state.example_copies)
+        "Example Copies": len(st.session_state.example_copies),
+        "Scraped Properties": len(st.session_state.scraped_properties)
     }
     
     for key, value in state_info.items():
@@ -1165,7 +1636,7 @@ st.markdown("---")
 footer_col1, footer_col2, footer_col3 = st.columns([2, 2, 1])
 
 with footer_col1:
-    st.caption("🏢 Centre Page Content Generator v2.0 - SEO Enhanced")
+    st.caption("🏢 Centre Page Content Generator v2.0 - SEO Enhanced with URL Scraping")
 
 with footer_col2:
     st.caption("Developed by MediaVision & Metis")
